@@ -69,5 +69,5 @@ The firmware must output data in this exact CSV order:
 Ax,Ay,Az,Gx,Gy,Gz,Mx,My,Mz,Temp,Press,Alt
 ```
 
-> [!WARNING]
-> **Internet Dependency**: The dashboard currently loads `Chart.js` from a CDN. If you are offline (e.g., at a competition venue), the charts will not render. Consider downloading `chart.js` locally for offline use.
+> [!TIP]
+> **Offline Ready**: The `Chart.js` library is bundled locally in the `firmware/` folder. This dashboard works **100% offline** — no internet connection required at competition venues.
