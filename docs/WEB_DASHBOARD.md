@@ -2,7 +2,7 @@
 
 [🔙 **Back to Main README**](../README.md)
 
-The **NAV Mission Control** dashboard is a browser-based ground control station for real-time telemetry monitoring and flight data recording.
+The **NAV Mission Control** dashboard is a browser-based ground control station for real-time telemetry monitoring, 3D orientation visualization, and flight data recording.
 
 ![Dashboard Preview](dashboard_preview.png)
 
@@ -29,6 +29,7 @@ The **NAV Mission Control** dashboard is a browser-based ground control station 
 | **Gyroscope** | 🔵 Blue | GX (Roll), GY (Pitch), GZ (Yaw) | deg/s |
 | **Magnetometer** | 🟡 Yellow | MX (North), MY (East), MZ (Down) | µT |
 | **Altimeter** | 🟢 Green | Altitude, Pressure | m / hPa |
+| **3D Orientation** | 🟢 Green | Pitch, Roll, Yaw/Heading | degrees |
 
 Each panel includes:
 *   **Real-time numeric readouts** at the top.
@@ -37,12 +38,38 @@ Each panel includes:
 
 ---
 
+## 🧊 3D Orientation View
+
+A **CSS 3D cube** at the bottom of the dashboard rotates in real-time to visualize the module's orientation.
+
+*   **Pitch** and **Roll** are computed from accelerometer data.
+*   **Yaw / Heading** is computed from magnetometer data.
+*   The cube faces are labeled (FRONT, BACK, LEFT, RIGHT, TOP, BOT) for easy reference.
+
+---
+
+## 🎮 Simulation Mode
+
+The dashboard includes a **Simulation Mode** for testing the UI without hardware connected.
+
+### How to Use
+1.  Open `index.html` in a browser (no hardware needed).
+2.  Click the **🎮 SIMULATE** button.
+3.  Status will change to **"SIMULATION MODE"** and charts will animate with fake sine-wave data.
+4.  The 3D cube will rotate, charts will scroll, and the Flight Recorder works normally.
+5.  Click **⏹ STOP SIM** to end simulation.
+
+> [!TIP]
+> Simulation Mode is great for **demos and presentations** where you don't have the hardware available.
+
+---
+
 ## 🔴 Flight Recorder
 
 The dashboard includes a built-in **Black Box** feature for data logging.
 
 ### How to Use
-1.  Connect to the module (status must be **ONLINE**).
+1.  Connect to the module (status must be **ONLINE** or **SIMULATION MODE**).
 2.  Click the **🔴 REC** button to start recording.
 3.  The button will pulse red while recording.
 4.  Click **⬛ STOP** to end the recording.
