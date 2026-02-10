@@ -1,22 +1,32 @@
-# Hardware Wiring & Pinout
+# 📟 Hardware Wiring & Pinout
 
-This document details the hardware connections for the Industrial AHRS Navigation Module (V3.0).
+[🔙 **Back to Main README**](../README.md)
 
-## Pinout Configuration
+This document details the hardware connections for the **Industrial AHRS Navigation Module (V3.0)**.
 
-| ESP32-S3 Pin | Function | Description |
-|--------------|----------|-------------|
-| 12 | SCK | SPI Clock |
-| 13 | MISO | SPI Master In Slave Out |
-| 11 | MOSI | SPI Master Out Slave In |
-| 10 | CS_IMU | Chip Select (ICM-20948) |
-| 9 | CS_BARO | Chip Select (BMP388) |
-| 5 | CAN_TX | CAN Bus Transmit |
-| 6 | CAN_RX | CAN Bus Receive |
-| 48 | LED_Builtin | Onboard RGB LED |
-| 1 | LED_Ext | External RGB LED Data Line |
+---
 
-## Connection Diagram
+## 📌 Pinout Configuration
+
+The module uses the **ESP32-S3 SuperMini**. Below is the complete pin mapping.
+
+| ESP32-S3 Pin | Function | Description | Type |
+| :--- | :--- | :--- | :--- |
+| **12** | `SCK` | SPI Clock | Output |
+| **13** | `MISO` | SPI Master In Slave Out | Input |
+| **11** | `MOSI` | SPI Master Out Slave In | Output |
+| **10** | `CS_IMU` | Chip Select (ICM-20948) | Output |
+| **9** | `CS_BARO` | Chip Select (BMP388) | Output |
+| **5** | `CAN_TX` | CAN Bus Transmit | Output |
+| **6** | `CAN_RX` | CAN Bus Receive | Input |
+| **48** | `LED_Builtin` | Onboard RGB LED | Output |
+| **1** | `LED_Ext` | External RGB LED Data Line | Output |
+
+---
+
+## 🔌 Connection Diagram
+
+The following diagram illustrates the signal flow between the components.
 
 ```mermaid
 graph TD
@@ -54,6 +64,11 @@ graph TD
     LED --> RGB
 ```
 
+---
+
 > [!WARNING]
-> **Power Voltage Warning**
-> The ESP32-S3 operates at **3.3V logic levels**. Do not connect 5V signals directly to any GPIO pins, as this may damage the MCU. Ensure your CAN transceiver and sensors are compatible or use level shifters.
+> **⚡ Power Voltage Warning**
+>
+> The ESP32-S3 operates at **3.3V logic levels**.
+> *   **Do not connect 5V signals** directly to any GPIO pins, as this may damage the MCU.
+> *   Ensure your CAN transceiver and sensors are **3.3V compatible** or use appropriate logic level shifters.
