@@ -1,0 +1,21 @@
+# === PlatformIO ===
+.pio/
+.vscode/
+lib/
+include/
+
+# === KiCad ===
+*-backups/
+*.bak
+*~
+_autosave-*
+fp-info-cache
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === IDE ===
+*.swp
+*.swo
