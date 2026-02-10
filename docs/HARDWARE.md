@@ -21,24 +21,24 @@ This document details the hardware connections for the Industrial AHRS Navigatio
 ```mermaid
 graph TD
     subgraph ESP32-S3 SuperMini
-        SCK[Pin 12 (SCK)]
-        MISO[Pin 13 (MISO)]
-        MOSI[Pin 11 (MOSI)]
-        CS_IMU[Pin 10 (CS_IMU)]
-        CS_BARO[Pin 9 (CS_BARO)]
-        TX[Pin 5 (TX)]
-        RX[Pin 6 (RX)]
-        LED[Pin 1 (LED Data)]
+        SCK["Pin 12 (SCK)"]
+        MISO["Pin 13 (MISO)"]
+        MOSI["Pin 11 (MOSI)"]
+        CS_IMU["Pin 10 (CS_IMU)"]
+        CS_BARO["Pin 9 (CS_BARO)"]
+        TX["Pin 5 (TX)"]
+        RX["Pin 6 (RX)"]
+        LED["Pin 1 (LED Data)"]
     end
 
     subgraph Sensors
-        ICM[ICM-20948 IMU]
-        BMP[BMP388 Barometer]
+        ICM["ICM-20948 IMU"]
+        BMP["BMP388 Barometer"]
     end
 
     subgraph Peripherals
-        CAN[CAN Transceiver]
-        RGB[External RGB LED]
+        CAN["CAN Transceiver"]
+        RGB["External RGB LED"]
     end
 
     SCK --> ICM
