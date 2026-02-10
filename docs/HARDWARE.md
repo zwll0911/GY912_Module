@@ -43,17 +43,17 @@ graph TD
 
     SCK --> ICM
     SCK --> BMP
-    MISO --> ICM
-    MISO --> BMP
+    ICM --> MISO
+    BMP --> MISO
     MOSI --> ICM
     MOSI --> BMP
     CS_IMU --> ICM
     CS_BARO --> BMP
     TX --> CAN
-    RX --> CAN
+    CAN --> RX
     LED --> RGB
 ```
 
 > [!WARNING]
 > **Power Voltage Warning**
-> The ESP32-S3 operates at **3.3V logic levels**. Do not connect 5V signals directly to any GPIO pins, as this may damage the MCU. Ensure your CAN transceiver and sensors differ are compatible or use level shifters.
+> The ESP32-S3 operates at **3.3V logic levels**. Do not connect 5V signals directly to any GPIO pins, as this may damage the MCU. Ensure your CAN transceiver and sensors are compatible or use level shifters.
