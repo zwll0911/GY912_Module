@@ -74,6 +74,7 @@ Detailed documentation is available in the `docs/` directory:
 *   📡 **[CAN Protocol Specification](docs/CAN_PROTOCOL.md)** - Message IDs and data formats.
 *   🏗️ **[System Architecture](docs/ARCHITECTURE.md)** - Internal design and data flow.
 *   🖥️ **[Web Dashboard Guide](docs/WEB_DASHBOARD.md)** - Real-time telemetry UI and flight recorder.
+*   🔩 **[PCB Design](docs/PCB_DESIGN.md)** - Circuit block diagram and component BOM.
 
 ## 📂 Project Structure
 
