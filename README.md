@@ -73,6 +73,7 @@ Detailed documentation is available in the `docs/` directory:
 *   📖 **[Hardware & Pinout Guide](docs/HARDWARE.md)** - Wiring diagrams and pin maps.
 *   📡 **[CAN Protocol Specification](docs/CAN_PROTOCOL.md)** - Message IDs and data formats.
 *   🏗️ **[System Architecture](docs/ARCHITECTURE.md)** - Internal design and data flow.
+*   🖥️ **[Web Dashboard Guide](docs/WEB_DASHBOARD.md)** - Real-time telemetry UI and flight recorder.
 
 ## 📂 Project Structure
 
