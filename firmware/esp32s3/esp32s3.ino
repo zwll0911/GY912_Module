@@ -1,12 +1,14 @@
 #include "driver/twai.h"
-#include "esp_task_wdt.h" // #5: Task Watchdog
+#include "esp_task_wdt.h"
 #include <Adafruit_BMP3XX.h>
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_Sensor.h>
 #include <Arduino.h>
+#include <ArduinoOTA.h> // #3: OTA
 #include <ICM_20948.h>
-#include <Preferences.h> // #9: NVS Storage
+#include <Preferences.h>
 #include <SPI.h>
+#include <WiFi.h> // #3: OTA
 
 
 // --- PINS ---
@@ -21,14 +23,25 @@
 #define PIN_LED_OB 48 // Blinking Purple LED
 
 // --- WATCHDOG ---
-#define WDT_TIMEOUT_SEC 5 // #5: Watchdog timeout (seconds)
+#define WDT_TIMEOUT_SEC 5
+
+// --- #5: ALTITUDE SMOOTHING ---
+#define ALT_AVG_SIZE 10
+
+// --- #2: CAN RECEIVE COMMAND IDs ---
+#define CAN_TX_ID_DEFAULT 0x101 // Outgoing: orientation data
+#define CAN_RX_CMD_ID 0x200     // Incoming: commands
+#define CAN_TX_HEARTBEAT 0x102  // Outgoing: heartbeat reply
+// Command bytes for 0x200:
+#define CMD_TARE 0x01
+#define CMD_SET_SLP 0x02
+#define CMD_HEARTBEAT 0x03
 
 // --- OBJECTS & GLOBALS ---
 ICM_20948_SPI myICM;
 Adafruit_BMP3XX bmp;
-Preferences prefs; // #9: NVS preferences
+Preferences prefs;
 
-// Create two separate LED instances
 Adafruit_NeoPixel extLED(1, PIN_LED_EXT, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel obLED(1, PIN_LED_OB, NEO_GRB + NEO_KHZ800);
 
@@ -36,18 +49,88 @@ Adafruit_NeoPixel obLED(1, PIN_LED_OB, NEO_GRB + NEO_KHZ800);
 float robotYaw = 0;
 float robotPitch = 0;
 float robotRoll = 0;
+float yawTareOffset = 0; // #2: Remote tare offset
 SemaphoreHandle_t dataMutex;
 
-// #9: NVS-stored sea-level pressure (default ISA)
+// #9/#4: NVS-stored settings
 float seaLevelPressure = 1013.25;
+uint32_t canTxId = CAN_TX_ID_DEFAULT;
+uint16_t canTxIntervalMs = 20; // 50Hz default
 
-// #7: Health telemetry (written by respective tasks, read by sensor for CSV)
+// Health telemetry
 volatile uint32_t canTxErrors = 0;
+
+// #1: Drift tracking
+float yawDriftRate = 0;
+
+// #5: Altitude moving average buffer
+float altBuffer[ALT_AVG_SIZE];
+uint8_t altBufIdx = 0;
+bool altBufFull = false;
+
+// #3: OTA state
+bool otaEnabled = false;
+bool otaInitialized = false;
 
 // --- TASK PROTOTYPES ---
 void taskSensor(void *pv);
 void taskCAN(void *pv);
 void taskLED(void *pv);
+
+// --- HELPER: #5 Altitude Moving Average ---
+float addAltSample(float sample) {
+  altBuffer[altBufIdx] = sample;
+  altBufIdx = (altBufIdx + 1) % ALT_AVG_SIZE;
+  if (!altBufFull && altBufIdx == 0)
+    altBufFull = true;
+
+  uint8_t count = altBufFull ? ALT_AVG_SIZE : altBufIdx;
+  if (count == 0)
+    return sample;
+  float sum = 0;
+  for (uint8_t i = 0; i < count; i++)
+    sum += altBuffer[i];
+  return sum / count;
+}
+
+// --- HELPER: #3 OTA Setup ---
+void setupOTA() {
+  if (otaInitialized)
+    return;
+
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP("NAV_MODULE_OTA", "navmodule");
+  Serial.print("OTA AP IP: ");
+  Serial.println(WiFi.softAPIP());
+
+  ArduinoOTA.setHostname("nav-module");
+  ArduinoOTA.onStart([]() { Serial.println("OTA: Start"); });
+  ArduinoOTA.onEnd([]() { Serial.println("OTA: Done, rebooting..."); });
+  ArduinoOTA.onError(
+      [](ota_error_t error) { Serial.printf("OTA Error [%u]\n", error); });
+  ArduinoOTA.begin();
+  otaInitialized = true;
+  Serial.println("OTA: Ready (connect to NAV_MODULE_OTA)");
+}
+
+void stopOTA() {
+  if (!otaInitialized)
+    return;
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_OFF);
+  otaInitialized = false;
+  Serial.println("OTA: Disabled");
+}
+
+// --- HELPER: #2 Save SLP to NVS ---
+void saveSLP(float newSLP) {
+  seaLevelPressure = newSLP;
+  prefs.begin("nav", false);
+  prefs.putFloat("slp", seaLevelPressure);
+  prefs.end();
+  Serial.print("SLP saved: ");
+  Serial.println(seaLevelPressure);
+}
 
 void setup() {
   Serial.begin(115200);
@@ -58,29 +141,32 @@ void setup() {
 
   // Initialize LEDs
   extLED.begin();
-  extLED.setBrightness(40); // slightly dimmer for rainbow
+  extLED.setBrightness(40);
   obLED.begin();
   obLED.setBrightness(50);
 
   SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, -1);
   dataMutex = xSemaphoreCreateMutex();
 
-  // --- 0. Load NVS Settings (#9) ---
-  prefs.begin("nav", true); // read-only
+  // --- 0. Load NVS Settings ---
+  prefs.begin("nav", true);
   seaLevelPressure = prefs.getFloat("slp", 1013.25);
+  canTxId = prefs.getUInt("canId", CAN_TX_ID_DEFAULT);
+  canTxIntervalMs = prefs.getUShort("canMs", 20);
+  otaEnabled = prefs.getBool("ota", false);
   prefs.end();
-  Serial.print("Sea Level Pressure: ");
-  Serial.println(seaLevelPressure);
+  Serial.printf("Config: SLP=%.2f, CAN_ID=0x%03X, CAN_ms=%d, OTA=%s\n",
+                seaLevelPressure, canTxId, canTxIntervalMs,
+                otaEnabled ? "ON" : "OFF");
 
   // --- 1. Initialize Sensor (DMP) ---
   myICM.begin(PIN_CS_ACCEL, SPI, 3000000);
 
   bool success = true;
-
   if (myICM.initializeDMP() != ICM_20948_Stat_Ok) {
     Serial.println("DMP Fail");
     obLED.setPixelColor(0, obLED.Color(255, 0, 0));
-    obLED.show(); // Red on fail
+    obLED.show();
     while (1)
       ;
   }
@@ -103,6 +189,10 @@ void setup() {
     bmp.setOutputDataRate(BMP3_ODR_50_HZ);
   }
 
+  // Initialize altitude buffer
+  for (int i = 0; i < ALT_AVG_SIZE; i++)
+    altBuffer[i] = 0;
+
   // --- 3. Initialize CAN Bus ---
   twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(
       (gpio_num_t)PIN_CAN_TX, (gpio_num_t)PIN_CAN_RX, TWAI_MODE_NORMAL);
@@ -114,7 +204,12 @@ void setup() {
     Serial.println("CAN Active");
   }
 
-  // --- 4. Start Tasks ---
+  // --- 4. OTA (if enabled in NVS) ---
+  if (otaEnabled) {
+    setupOTA();
+  }
+
+  // --- 5. Start Tasks ---
   if (success) {
     xTaskCreatePinnedToCore(taskSensor, "IMU", 4096, NULL, 3, NULL, 1);
     xTaskCreatePinnedToCore(taskCAN, "CAN", 4096, NULL, 2, NULL, 0);
@@ -123,15 +218,46 @@ void setup() {
   }
 }
 
-void loop() { vTaskDelete(NULL); }
+void loop() {
+  // #3: Handle OTA in main loop (runs on Core 0 before deletion)
+  // Also handle serial commands for OTA toggle
+  if (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    if (cmd == "OTA_ON") {
+      otaEnabled = true;
+      prefs.begin("nav", false);
+      prefs.putBool("ota", true);
+      prefs.end();
+      setupOTA();
+    } else if (cmd == "OTA_OFF") {
+      otaEnabled = false;
+      prefs.begin("nav", false);
+      prefs.putBool("ota", false);
+      prefs.end();
+      stopOTA();
+    }
+  }
+  if (otaInitialized) {
+    ArduinoOTA.handle();
+    vTaskDelay(pdMS_TO_TICKS(10));
+  } else {
+    // If OTA not active, delete this task to save resources
+    vTaskDelete(NULL);
+  }
+}
 
 // --- TASK 1: SENSOR DATA (Core 1, 200Hz) ---
 void taskSensor(void *pv) {
-  // #5: Register this task with the watchdog
   esp_task_wdt_add(NULL);
 
+  // #1: Drift tracking variables
+  float prevYaw = 0;
+  unsigned long prevDriftTime = millis();
+  float driftAccum = 0;
+  uint16_t driftSamples = 0;
+
   while (1) {
-    // #5: Feed the watchdog
     esp_task_wdt_reset();
 
     icm_20948_DMP_data_t data;
@@ -146,7 +272,6 @@ void taskSensor(void *pv) {
         double q3 = ((double)data.Quat6.Data.Q3) / 1073741824.0;
         double q0 = sqrt(1.0 - ((q1 * q1) + (q2 * q2) + (q3 * q3)));
 
-        // Euler conversion (done outside mutex, uses local vars)
         float localRoll =
             atan2(2.0 * (q0 * q1 + q2 * q3), 1.0 - 2.0 * (q1 * q1 + q2 * q2)) *
             180.0 / PI;
@@ -155,15 +280,30 @@ void taskSensor(void *pv) {
             atan2(2.0 * (q0 * q3 + q1 * q2), 1.0 - 2.0 * (q2 * q2 + q3 * q3)) *
             180.0 / PI;
 
-        // #6: Read barometer OUTSIDE mutex (slow SPI operation)
-        float temp = 0, alt = 0, press = 0;
+        // #1: Calculate yaw drift rate (°/s, EMA)
+        unsigned long now = millis();
+        float dt = (now - prevDriftTime) / 1000.0;
+        if (dt > 0.001) {
+          float instantDrift = fabs(localYaw - prevYaw) / dt;
+          // Handle wraparound at ±180
+          if (instantDrift > 180.0 / dt)
+            instantDrift = fabs(360.0 - instantDrift * dt) / dt;
+          // Exponential moving average (alpha = 0.05 for smooth)
+          yawDriftRate = yawDriftRate * 0.95 + instantDrift * 0.05;
+          prevYaw = localYaw;
+          prevDriftTime = now;
+        }
+
+        // Read barometer (outside mutex)
+        float temp = 0, press = 0, rawAlt = 0, smoothAlt = 0;
         if (bmp.performReading()) {
           temp = bmp.temperature;
           press = bmp.pressure / 100.0;
-          alt = bmp.readAltitude(seaLevelPressure); // #9: Uses NVS value
+          rawAlt = bmp.readAltitude(seaLevelPressure);
+          smoothAlt = addAltSample(rawAlt); // #5: Moving average
         }
 
-        // #1: Mutex only protects the 3 shared floats (minimal lock time)
+        // Mutex: only write shared floats
         if (xSemaphoreTake(dataMutex, portMAX_DELAY)) {
           robotYaw = localYaw;
           robotPitch = localPitch;
@@ -171,8 +311,7 @@ void taskSensor(void *pv) {
           xSemaphoreGive(dataMutex);
         }
 
-        // #1: Serial output OUTSIDE mutex (no longer blocks CAN task)
-        // #7: CSV format: 15 fields (added freeHeap + canTxErrors)
+        // CSV: 16 fields (added yawDriftRate at [15])
         Serial.print("0.0,0.0,0.0,");
         Serial.print(localPitch);
         Serial.print(",");
@@ -187,38 +326,80 @@ void taskSensor(void *pv) {
         Serial.print(",");
         Serial.print(press);
         Serial.print(",");
-        Serial.print(alt);
-        Serial.print(",");
+        Serial.print(smoothAlt);
+        Serial.print(","); // #5: smoothed
         Serial.print(esp_get_free_heap_size());
         Serial.print(",");
-        Serial.println(canTxErrors);
+        Serial.print(canTxErrors);
+        Serial.print(",");
+        Serial.println(yawDriftRate, 4); // #1: drift in °/s
       }
     }
     vTaskDelay(pdMS_TO_TICKS(5));
   }
 }
 
-// --- TASK 2: CAN BUS (Core 0, 50Hz) ---
+// --- TASK 2: CAN BUS (Core 0, configurable Hz) ---
 void taskCAN(void *pv) {
   while (1) {
-    // #2: Check CAN bus health and recover from bus-off
+    // --- Health check & bus-off recovery ---
     twai_status_info_t status;
     if (twai_get_status_info(&status) == ESP_OK) {
-      canTxErrors = status.tx_error_counter; // #7: Report to telemetry
+      canTxErrors = status.tx_error_counter;
 
       if (status.state == TWAI_STATE_BUS_OFF) {
-        // Bus-off recovery: stop, recover, restart
         twai_initiate_recovery();
         vTaskDelay(pdMS_TO_TICKS(100));
         twai_start();
         Serial.println("CAN: Bus-off recovery");
-        vTaskDelay(pdMS_TO_TICKS(20));
+        vTaskDelay(pdMS_TO_TICKS(canTxIntervalMs));
         continue;
       }
     }
 
+    // --- #2: Receive incoming commands ---
+    twai_message_t rxMsg;
+    while (twai_receive(&rxMsg, 0) == ESP_OK) { // Non-blocking poll
+      if (rxMsg.identifier == CAN_RX_CMD_ID && rxMsg.data_length_code >= 1) {
+        switch (rxMsg.data[0]) {
+        case CMD_TARE: {
+          // Remote tare: set current yaw as zero reference
+          if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(5))) {
+            yawTareOffset = robotYaw;
+            xSemaphoreGive(dataMutex);
+          }
+          Serial.println("CAN: Remote TARE");
+          break;
+        }
+        case CMD_SET_SLP: {
+          // Set sea-level pressure: bytes[1-4] = float (little-endian)
+          if (rxMsg.data_length_code >= 5) {
+            float newSLP;
+            memcpy(&newSLP, &rxMsg.data[1], sizeof(float));
+            if (newSLP > 800.0 && newSLP < 1200.0) { // Sanity check
+              saveSLP(newSLP);
+            }
+          }
+          break;
+        }
+        case CMD_HEARTBEAT: {
+          // Reply with heartbeat on 0x102
+          twai_message_t hbReply;
+          hbReply.identifier = CAN_TX_HEARTBEAT;
+          hbReply.data_length_code = 2;
+          hbReply.data[0] = 0xAC; // ACK
+          hbReply.data[1] =
+              (uint8_t)(esp_get_free_heap_size() / 1024); // Heap KB
+          twai_transmit(&hbReply, pdMS_TO_TICKS(5));
+          break;
+        }
+        }
+      }
+    }
+
+    // --- Transmit orientation data ---
     twai_message_t message;
-    message.identifier = 0x101;
+    message.identifier = canTxId; // #4: Configurable
     message.data_length_code = 6;
 
     if (xSemaphoreTake(dataMutex, portMAX_DELAY)) {
@@ -236,43 +417,32 @@ void taskCAN(void *pv) {
 
       twai_transmit(&message, pdMS_TO_TICKS(10));
     }
-    vTaskDelay(pdMS_TO_TICKS(20));
+    vTaskDelay(pdMS_TO_TICKS(canTxIntervalMs)); // #4: Configurable
   }
 }
 
-// --- TASK 3: HYBRID LED CONTROL (Rainbow + Blink) ---
+// --- TASK 3: HYBRID LED CONTROL ---
 void taskLED(void *pv) {
   uint16_t rainbowHue = 0;
   uint16_t blinkTimer = 0;
   bool blinkState = false;
 
-  // Define Colors
   uint32_t purple = obLED.Color(60, 0, 150);
   uint32_t off = obLED.Color(0, 0, 0);
 
   while (1) {
-    // 1. RAINBOW EFFECT (Pin 1) - Updates every loop (fast)
-    // The hue goes from 0 to 65535 to circle the color wheel
     extLED.setPixelColor(0, extLED.ColorHSV(rainbowHue));
     extLED.show();
-
-    // Increment hue for next loop (speed determined by increment size)
     rainbowHue += 250;
 
-    // 2. PURPLE BLINK (Pin 48) - Updates every ~500ms
     blinkTimer++;
-    if (blinkTimer >= 15) { // Adjust this for speed
+    if (blinkTimer >= 15) {
       blinkState = !blinkState;
-      if (blinkState) {
-        obLED.setPixelColor(0, purple);
-      } else {
-        obLED.setPixelColor(0, off);
-      }
+      obLED.setPixelColor(0, blinkState ? purple : off);
       obLED.show();
-      blinkTimer = 0; // Reset timer
+      blinkTimer = 0;
     }
 
-    // Loop runs at ~50Hz (20ms)
     vTaskDelay(pdMS_TO_TICKS(20));
   }
 }

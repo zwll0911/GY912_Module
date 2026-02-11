@@ -5,8 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NAV PANEL</title>
-    <script src="chart.js"></script> <!-- #3: Local chart.js for offline use -->
+    <script src="chart.js"></script>
     <style>
+        /* --- #6: THEME SYSTEM --- */
         :root {
             --primary-purple: #bd00ff;
             --accent-cyan: #00f3ff;
@@ -14,6 +15,24 @@
             --bg-dark: #05000a;
             --panel-bg: rgba(18, 2, 28, 0.9);
             --text-dim: #9e8fb2;
+            --text-main: #fff;
+            --grid-line: rgba(189, 0, 255, 0.05);
+            --header-bg: rgba(10, 0, 15, 0.95);
+            --graph-bg: rgba(0, 0, 0, 0.3);
+            --graph-grid: rgba(255, 255, 255, 0.05);
+            --graph-tick: #666;
+        }
+
+        [data-theme="light"] {
+            --bg-dark: #f0f0f5;
+            --panel-bg: rgba(255, 255, 255, 0.95);
+            --text-dim: #666;
+            --text-main: #111;
+            --grid-line: rgba(0, 0, 0, 0.05);
+            --header-bg: rgba(255, 255, 255, 0.98);
+            --graph-bg: rgba(0, 0, 0, 0.05);
+            --graph-grid: rgba(0, 0, 0, 0.08);
+            --graph-tick: #999;
         }
 
         * {
@@ -22,7 +41,7 @@
 
         body {
             background-color: var(--bg-dark);
-            color: #fff;
+            color: var(--text-main);
             font-family: 'Segoe UI', 'Verdana', sans-serif;
             margin: 0;
             height: 100vh;
@@ -31,15 +50,15 @@
             flex-direction: column;
             overflow: hidden;
             background-image:
-                linear-gradient(rgba(189, 0, 255, 0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(189, 0, 255, 0.05) 1px, transparent 1px);
+                linear-gradient(var(--grid-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
             background-size: 40px 40px;
+            transition: background-color 0.3s, color 0.3s;
         }
 
-        /* --- HEADER --- */
         header {
             height: 55px;
-            background: rgba(10, 0, 15, 0.95);
+            background: var(--header-bg);
             border-bottom: 2px solid var(--primary-purple);
             padding: 0 20px;
             display: flex;
@@ -53,18 +72,18 @@
             font-size: 1.2rem;
             letter-spacing: 2px;
             margin: 0;
-            background: linear-gradient(90deg, #fff, var(--primary-purple));
+            background: linear-gradient(90deg, var(--text-main), var(--primary-purple));
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             font-weight: 800;
         }
 
-        /* --- DASHBOARD GRID --- */
         .dashboard {
             flex-grow: 1;
             display: grid;
             grid-template-columns: 300px 1fr 300px;
-            grid-template-rows: 60% 40%;
+            grid-template-rows: 55% 35% 10%;
             gap: 15px;
             padding: 15px;
         }
@@ -77,8 +96,9 @@
             display: flex;
             flex-direction: column;
             position: relative;
-            box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.6);
+            box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.2);
             overflow: hidden;
+            transition: background 0.3s;
         }
 
         h2 {
@@ -92,7 +112,6 @@
             font-weight: 700;
         }
 
-        /* --- DATA VALUES --- */
         .data-box {
             background: rgba(255, 255, 255, 0.03);
             border-left: 4px solid var(--accent-cyan);
@@ -121,7 +140,7 @@
 
         .value-md {
             font-size: 1.4rem;
-            color: #fff;
+            color: var(--text-main);
             font-weight: bold;
         }
 
@@ -193,6 +212,52 @@
             transform: rotateX(-90deg) translateZ(90px);
         }
 
+        /* --- #9: COMPASS ROSE --- */
+        .compass-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        .compass-svg {
+            width: 120px;
+            height: 120px;
+            transition: transform 0.05s linear;
+        }
+
+        .compass-ring {
+            fill: none;
+            stroke: var(--primary-purple);
+            stroke-width: 2;
+            opacity: 0.4;
+        }
+
+        .compass-tick {
+            stroke: var(--text-dim);
+            stroke-width: 1.5;
+        }
+
+        .compass-tick-major {
+            stroke: var(--accent-cyan);
+            stroke-width: 2;
+        }
+
+        .compass-label {
+            fill: var(--text-dim);
+            font-size: 10px;
+            font-family: Consolas, monospace;
+            text-anchor: middle;
+        }
+
+        .compass-needle {
+            fill: var(--alert-pink);
+        }
+
+        .compass-needle-white {
+            fill: var(--accent-cyan);
+        }
+
         /* --- BUTTONS --- */
         .btn {
             width: 100%;
@@ -207,6 +272,7 @@
             letter-spacing: 1px;
             transition: 0.2s;
             margin-top: auto;
+            border-radius: 4px;
         }
 
         .btn:hover {
@@ -230,7 +296,6 @@
             box-shadow: 0 0 20px var(--accent-cyan);
         }
 
-        /* --- #11: RECORD BUTTON --- */
         .btn-rec {
             background: rgba(255, 0, 85, 0.1);
             border-color: var(--alert-pink);
@@ -243,7 +308,6 @@
         .btn-rec:hover {
             background: var(--alert-pink);
             color: #000;
-            box-shadow: 0 0 20px var(--alert-pink);
         }
 
         .btn-rec.recording {
@@ -264,6 +328,25 @@
             }
         }
 
+        /* #6: Theme toggle button */
+        .btn-theme {
+            background: none;
+            border: 1px solid var(--text-dim);
+            color: var(--text-dim);
+            width: auto;
+            padding: 4px 10px;
+            margin: 0 10px 0 0;
+            font-size: 1rem;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: 0.2s;
+        }
+
+        .btn-theme:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
         /* --- GRAPHS --- */
         .graph-area {
             grid-column: span 3;
@@ -273,7 +356,7 @@
         }
 
         .graph-panel {
-            background: rgba(0, 0, 0, 0.3);
+            background: var(--graph-bg);
             border-radius: 4px;
             padding: 10px;
             display: flex;
@@ -292,34 +375,94 @@
             flex-grow: 1;
             min-height: 0;
         }
+
+        /* --- #7: STATUS BAR --- */
+        .status-bar {
+            grid-column: span 3;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 5px 15px;
+            background: var(--panel-bg);
+            border: 1px solid rgba(189, 0, 255, 0.2);
+            border-radius: 4px;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            font-family: Consolas, monospace;
+        }
+
+        .status-bar span {
+            margin-right: 20px;
+        }
+
+        .stat-val {
+            color: var(--accent-cyan);
+            font-weight: bold;
+        }
+
+        .stat-bad {
+            color: var(--alert-pink);
+        }
     </style>
 </head>
 
 <body>
 
     <header>
-        <h1>NAV-PANEL v5.2</h1>
+        <h1>NAV-PANEL v5.3</h1>
         <div style="display:flex; align-items:center;">
             <span id="status" style="font-size:0.8rem; margin-right:20px; color:#666; font-weight:bold;">●
                 OFFLINE</span>
-            <!-- #11: Record button -->
+            <button id="btnTheme" class="btn-theme" title="Toggle theme">🌙</button>
             <button id="btnRec" class="btn btn-rec" style="display:none;">● REC</button>
             <button id="btnConn" class="btn btn-connect">CONNECT</button>
         </div>
     </header>
 
     <div class="dashboard">
+        <!-- LEFT PANEL: Navigation + Compass -->
         <div class="panel">
             <h2>Primary Navigation</h2>
 
+            <!-- #9: Compass Rose -->
+            <div class="compass-container">
+                <svg id="compassSvg" class="compass-svg" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="55" class="compass-ring" />
+                    <circle cx="60" cy="60" r="40" class="compass-ring" style="opacity:0.2" />
+                    <!-- Cardinal ticks -->
+                    <line x1="60" y1="5" x2="60" y2="15" class="compass-tick-major" />
+                    <line x1="115" y1="60" x2="105" y2="60" class="compass-tick-major" />
+                    <line x1="60" y1="115" x2="60" y2="105" class="compass-tick-major" />
+                    <line x1="5" y1="60" x2="15" y2="60" class="compass-tick-major" />
+                    <!-- 45° ticks -->
+                    <line x1="98.9" y1="21.1" x2="92" y2="28" class="compass-tick" />
+                    <line x1="98.9" y1="98.9" x2="92" y2="92" class="compass-tick" />
+                    <line x1="21.1" y1="98.9" x2="28" y2="92" class="compass-tick" />
+                    <line x1="21.1" y1="21.1" x2="28" y2="28" class="compass-tick" />
+                    <!-- Labels -->
+                    <text x="60" y="24" class="compass-label"
+                        style="fill:var(--accent-cyan); font-weight:bold; font-size:12px;">N</text>
+                    <text x="100" y="64" class="compass-label">E</text>
+                    <text x="60" y="110" class="compass-label">S</text>
+                    <text x="20" y="64" class="compass-label">W</text>
+                    <!-- Needle (rotated by JS) -->
+                    <g id="compassNeedle">
+                        <polygon points="60,18 56,60 64,60" class="compass-needle-white" />
+                        <polygon points="60,102 56,60 64,60" class="compass-needle" />
+                    </g>
+                    <!-- Center dot -->
+                    <circle cx="60" cy="60" r="4" fill="var(--primary-purple)" />
+                </svg>
+            </div>
+
             <div class="data-box" style="border-left-color: var(--primary-purple);">
                 <span class="label">HEADING</span>
-                <div><span id="v_y" class="value">0.00</span><span class="unit">°</span></div>
+                <div><span id="v_y" class="value" style="font-size:1.4rem;">0.00</span><span class="unit">°</span></div>
             </div>
 
             <div class="data-box">
                 <span class="label">RELATIVE</span>
-                <div><span id="v_yr" class="value" style="color:var(--accent-cyan);">0.00</span><span
+                <div><span id="v_yr" class="value" style="font-size:1.4rem; color:var(--accent-cyan);">0.00</span><span
                         class="unit">°</span></div>
             </div>
 
@@ -337,6 +480,7 @@
             <button id="btnTare" class="btn">TARE ZERO POINT</button>
         </div>
 
+        <!-- CENTER: 3D Cube -->
         <div class="panel" style="padding: 0;">
             <div style="position: absolute; top: 10px; left: 15px; z-index: 10;">
                 <h2>Spatial Awareness</h2>
@@ -353,11 +497,13 @@
             </div>
         </div>
 
+        <!-- RIGHT PANEL: Environment + Health -->
         <div class="panel">
             <h2>Environment</h2>
             <div class="data-box" style="border-left-color: var(--alert-pink);">
                 <span class="label">ALTITUDE</span>
-                <div><span id="v_alt" class="value" style="color:#fff;">0.0</span><span class="unit">m</span></div>
+                <div><span id="v_alt" class="value" style="color:var(--text-main);">0.0</span><span
+                        class="unit">m</span></div>
             </div>
 
             <div style="display:flex; justify-content:space-between; margin-bottom:10px; padding:0 5px;">
@@ -373,19 +519,23 @@
                 </div>
             </div>
 
-            <!-- #7: Live system health indicators -->
             <div style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top:10px;">
                 <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:5px;">
                     <span class="label">FREE HEAP</span>
                     <span id="v_heap" style="color:var(--accent-cyan);">—</span>
                 </div>
-                <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:5px;">
                     <span class="label">CAN BUS</span>
                     <span id="v_can" style="color:var(--primary-purple);">WAITING</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
+                    <span class="label">YAW DRIFT</span>
+                    <span id="v_drift" style="color:var(--text-dim);">—</span>
                 </div>
             </div>
         </div>
 
+        <!-- GRAPHS -->
         <div class="panel graph-area">
             <div class="graph-panel">
                 <div class="graph-title" style="color:var(--accent-cyan)">YAW STABILITY</div>
@@ -400,17 +550,63 @@
                 <div class="graph-wrapper"><canvas id="chartRoll"></canvas></div>
             </div>
         </div>
+
+        <!-- #7: STATUS BAR -->
+        <div class="status-bar">
+            <div>
+                <span>LINES: <span id="statLines" class="stat-val">0</span></span>
+                <span>REJECTED: <span id="statReject" class="stat-val">0</span></span>
+                <span>UPTIME: <span id="statUptime" class="stat-val">00:00:00</span></span>
+            </div>
+            <div>
+                <span>PORT: <span id="statPort" class="stat-val">—</span></span>
+            </div>
+        </div>
     </div>
 
     <script>
-        // --- VARIABLES ---
+        // --- STATE ---
         let reader, port, tareVal = 0;
+        let isRecording = false, recordedData = [];
 
-        // #11: Recording state
-        let isRecording = false;
-        let recordedData = [];
+        // #7: Error counters
+        let lineCount = 0, rejectCount = 0;
+        let connectTime = null, uptimeInterval = null;
 
-        // --- COMMON CHART OPTIONS ---
+        // --- #6: THEME ---
+        const savedTheme = localStorage.getItem('navTheme') || 'dark';
+        if (savedTheme === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+            document.getElementById('btnTheme').innerText = '☀️';
+        }
+
+        document.getElementById('btnTheme').onclick = () => {
+            const current = document.documentElement.getAttribute('data-theme');
+            if (current === 'light') {
+                document.documentElement.removeAttribute('data-theme');
+                document.getElementById('btnTheme').innerText = '🌙';
+                localStorage.setItem('navTheme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+                document.getElementById('btnTheme').innerText = '☀️';
+                localStorage.setItem('navTheme', 'light');
+            }
+            // Update chart grid colors
+            updateChartTheme();
+        };
+
+        function updateChartTheme() {
+            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+            const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)';
+            const tickColor = isLight ? '#999' : '#666';
+            [chartYaw, chartPitch, chartRoll].forEach(c => {
+                c.options.scales.y.grid.color = gridColor;
+                c.options.scales.y.ticks.color = tickColor;
+                c.update();
+            });
+        }
+
+        // --- CHART OPTIONS ---
         const commonOptions = {
             responsive: true,
             maintainAspectRatio: false,
@@ -423,43 +619,40 @@
             elements: { point: { radius: 0 } }
         };
 
-        // --- INIT CHARTS ---
         const chartYaw = new Chart(document.getElementById('chartYaw'), {
             type: 'line',
             data: { labels: Array(40).fill(''), datasets: [{ data: Array(40).fill(0), borderColor: '#00f3ff', borderWidth: 2, tension: 0.3 }] },
-            options: commonOptions
+            options: JSON.parse(JSON.stringify(commonOptions))
         });
 
         const chartPitch = new Chart(document.getElementById('chartPitch'), {
             type: 'line',
             data: { labels: Array(40).fill(''), datasets: [{ data: Array(40).fill(0), borderColor: '#bd00ff', borderWidth: 2, tension: 0.3 }] },
-            options: commonOptions
+            options: JSON.parse(JSON.stringify(commonOptions))
         });
 
         const chartRoll = new Chart(document.getElementById('chartRoll'), {
             type: 'line',
             data: { labels: Array(40).fill(''), datasets: [{ data: Array(40).fill(0), borderColor: '#ff0055', borderWidth: 2, tension: 0.3 }] },
-            options: commonOptions
+            options: JSON.parse(JSON.stringify(commonOptions))
         });
 
         // --- TARE ---
-        document.getElementById('btnTare').onclick = () => { tareVal = parseFloat(document.getElementById('v_y').innerText); };
+        document.getElementById('btnTare').onclick = () => {
+            tareVal = parseFloat(document.getElementById('v_y').innerText);
+        };
 
-        // --- #11: RECORDING ---
+        // --- RECORDING ---
         document.getElementById('btnRec').onclick = () => {
             if (!isRecording) {
-                // Start recording
                 isRecording = true;
-                recordedData = [];
-                recordedData.push("Timestamp,Pitch,Roll,Yaw,Temp,Pressure,Altitude,FreeHeap,CAN_TxErrors");
+                recordedData = ["Timestamp,Pitch,Roll,Yaw,Temp,Pressure,Altitude,FreeHeap,CAN_TxErrors,DriftRate"];
                 document.getElementById('btnRec').innerText = "■ STOP";
                 document.getElementById('btnRec').classList.add('recording');
             } else {
-                // Stop recording & download
                 isRecording = false;
                 document.getElementById('btnRec').innerText = "● REC";
                 document.getElementById('btnRec').classList.remove('recording');
-
                 if (recordedData.length > 1) {
                     const blob = new Blob([recordedData.join('\n')], { type: 'text/csv' });
                     const url = URL.createObjectURL(blob);
@@ -472,7 +665,23 @@
             }
         };
 
-        // --- SERIAL CONNECTION (#4 + #10) ---
+        // --- #7: UPTIME TIMER ---
+        function startUptime() {
+            connectTime = Date.now();
+            uptimeInterval = setInterval(() => {
+                const s = Math.floor((Date.now() - connectTime) / 1000);
+                const h = String(Math.floor(s / 3600)).padStart(2, '0');
+                const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+                const sec = String(s % 60).padStart(2, '0');
+                document.getElementById('statUptime').innerText = `${h}:${m}:${sec}`;
+            }, 1000);
+        }
+
+        function stopUptime() {
+            if (uptimeInterval) { clearInterval(uptimeInterval); uptimeInterval = null; }
+        }
+
+        // --- SERIAL CONNECTION ---
         document.getElementById('btnConn').onclick = async () => {
             try {
                 port = await navigator.serial.requestPort();
@@ -481,33 +690,29 @@
                 const decoder = new TextDecoderStream();
                 port.readable.pipeTo(decoder.writable);
                 reader = decoder.readable.getReader();
-
-                // #4: Catch disconnect errors
                 readLoop().catch(handleDisconnect);
-            } catch (e) {
-                console.log(e);
-            }
+            } catch (e) { console.log(e); }
         };
 
         function setOnline() {
             document.getElementById('status').innerText = "● ONLINE";
             document.getElementById('status').style.color = "#00f3ff";
             document.getElementById('btnConn').style.display = 'none';
-            document.getElementById('btnRec').style.display = 'inline-block';  // #11: Show REC
+            document.getElementById('btnRec').style.display = 'inline-block';
+            document.getElementById('statPort').innerText = 'CONNECTED';
+            lineCount = 0; rejectCount = 0;
+            startUptime();
         }
 
-        // #4 + #10: Handle disconnect — show status and RECONNECT button
         function handleDisconnect() {
             document.getElementById('status').innerText = "● DISCONNECTED";
             document.getElementById('status').style.color = "#ff0055";
             document.getElementById('btnConn').innerText = "RECONNECT";
             document.getElementById('btnConn').style.display = 'inline-block';
             document.getElementById('btnRec').style.display = 'none';
-
-            // Stop recording if active
-            if (isRecording) {
-                document.getElementById('btnRec').click();
-            }
+            document.getElementById('statPort').innerText = 'DISCONNECTED';
+            stopUptime();
+            if (isRecording) document.getElementById('btnRec').click();
         }
 
         async function readLoop() {
@@ -518,15 +723,27 @@
                 buffer += value;
                 let lines = buffer.split('\n');
                 buffer = lines.pop();
-                for (let line of lines) if (line.includes(',')) update(line);
+                for (let line of lines) {
+                    if (line.includes(',')) {
+                        update(line);
+                    }
+                }
             }
-            // Stream ended normally (USB unplugged)
             handleDisconnect();
         }
 
         function update(line) {
             const d = line.split(',').map(Number);
-            if (d.length < 13) return;
+            lineCount++;
+            document.getElementById('statLines').innerText = lineCount;
+
+            if (d.length < 13) {
+                rejectCount++;
+                document.getElementById('statReject').innerText = rejectCount;
+                const el = document.getElementById('statReject');
+                el.classList.add('stat-bad');
+                return;
+            }
 
             const p = d[3], r = d[4], y = d[5], temp = d[10], alt = d[12];
 
@@ -538,39 +755,51 @@
             document.getElementById('v_press').innerText = d[11].toFixed(0);
             document.getElementById('v_alt').innerText = alt.toFixed(1);
 
-            // #7: Live system health (fields 13 & 14, if present)
+            // #9: Rotate compass needle
+            document.getElementById('compassNeedle').setAttribute('transform', `rotate(${y}, 60, 60)`);
+
+            // Health fields (if present)
             if (d.length >= 15) {
-                const freeHeap = d[13];
-                const canErrors = d[14];
-
-                // Free heap display (KB)
-                document.getElementById('v_heap').innerText = (freeHeap / 1024).toFixed(0) + " KB";
-
-                // CAN status — green if 0 errors, red if errors detected
+                document.getElementById('v_heap').innerText = (d[13] / 1024).toFixed(0) + " KB";
                 const canEl = document.getElementById('v_can');
-                if (canErrors === 0) {
+                if (d[14] === 0) {
                     canEl.innerText = "OK (1 MBPS)";
                     canEl.style.color = "var(--accent-cyan)";
                 } else {
-                    canEl.innerText = "ERR:" + canErrors;
+                    canEl.innerText = "ERR:" + d[14];
                     canEl.style.color = "var(--alert-pink)";
                 }
             }
 
-            // 3D Cube (pitch & roll inverted for CSS convention)
+            // #1: Drift rate (field 15)
+            if (d.length >= 16) {
+                const drift = d[15];
+                const driftEl = document.getElementById('v_drift');
+                driftEl.innerText = drift.toFixed(3) + " °/s";
+                if (drift < 0.05) {
+                    driftEl.style.color = "var(--accent-cyan)";   // Stable
+                } else if (drift < 0.2) {
+                    driftEl.style.color = "#ffaa00";               // Warning
+                } else {
+                    driftEl.style.color = "var(--alert-pink)";     // High drift
+                }
+            }
+
+            // 3D Cube
             document.getElementById('cube').style.transform = `rotateX(${-p}deg) rotateY(${y}deg) rotateZ(${-r}deg)`;
 
-            // Update Graphs
+            // Graphs
             updateGraph(chartYaw, y - tareVal);
             updateGraph(chartPitch, p);
             updateGraph(chartRoll, r);
 
-            // #11: Record data line
+            // Recording
             if (isRecording) {
                 const ts = new Date().toISOString();
                 const heap = d.length >= 14 ? d[13] : '';
                 const canE = d.length >= 15 ? d[14] : '';
-                recordedData.push(`${ts},${p},${r},${y},${temp},${d[11]},${alt},${heap},${canE}`);
+                const drift = d.length >= 16 ? d[15] : '';
+                recordedData.push(`${ts},${p},${r},${y},${temp},${d[11]},${alt},${heap},${canE},${drift}`);
             }
         }
 

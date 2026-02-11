@@ -4,6 +4,33 @@ All notable changes to the **Industrial AHRS Navigation Module** will be documen
 
 ---
 
+## [5.3] — 2026-02-12
+
+### 🔧 Firmware Improvements
+- **Yaw Drift Indicator**: Exponential moving average of yaw rate-of-change (°/s) with wraparound handling. Added as CSV field [15].
+- **Bidirectional CAN**: Added `twai_receive()` handler for incoming commands on `0x200`:
+  - `0x01` → Remote TARE (zero yaw offset).
+  - `0x02` + 4-byte float → Set sea-level pressure (saved to NVS).
+  - `0x03` → Heartbeat reply on `0x102` with heap KB.
+- **OTA Firmware Updates**: WiFi AP mode (`NAV_MODULE_OTA`, password: `navmodule`) with ArduinoOTA. Toggle via serial commands `OTA_ON` / `OTA_OFF`. State persisted in NVS.
+- **Configurable CAN**: TX message ID and transmit interval stored in NVS (defaults: `0x101`, 20ms/50Hz).
+- **Altitude Smoothing**: 10-sample circular buffer moving average on BMP388 altitude readings.
+
+### 🖥️ Dashboard Improvements
+- **SVG Compass Rose**: Real-time rotating compass needle synchronized with yaw heading.
+- **Theme Toggle**: Dark (cyberpunk) / Light (high-contrast) theme switch. Saved to `localStorage`. Chart grid colors update with theme.
+- **Error Counters**: Status bar showing total lines received, rejected lines, and connection uptime timer.
+- **Yaw Drift Display**: Live drift rate (°/s) with color-coded severity (cyan/yellow/red).
+- **CSV Recorder**: Now includes drift rate field in exported CSV.
+
+### 🧪 Tests
+- **Added** `tests/test_can_packing.py`: 20+ pytest cases for CAN byte packing/unpacking including edge cases, round-trip, and full payload verification.
+
+### 📁 Project Structure
+- **Added** `tests/` directory.
+
+---
+
 ## [5.2] — 2026-02-12
 
 ### 🔧 Firmware Improvements

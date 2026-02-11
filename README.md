@@ -1,4 +1,4 @@
-# 🚁 Industrial AHRS Navigation Module (V5.2)
+# 🚁 Industrial AHRS Navigation Module (V5.3)
 
 ![ESP32-S3](https://img.shields.io/badge/Hardware-ESP32--S3-red?style=for-the-badge&logo=espressif)
 ![Sensor Fusion](https://img.shields.io/badge/Fusion-DMP_225Hz-blue?style=for-the-badge)
