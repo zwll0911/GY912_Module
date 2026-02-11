@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NAV PANEL</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="chart.js"></script> <!-- #3: Local chart.js for offline use -->
     <style>
         :root {
             --primary-purple: #bd00ff;
@@ -230,6 +230,40 @@
             box-shadow: 0 0 20px var(--accent-cyan);
         }
 
+        /* --- #11: RECORD BUTTON --- */
+        .btn-rec {
+            background: rgba(255, 0, 85, 0.1);
+            border-color: var(--alert-pink);
+            color: var(--alert-pink);
+            width: auto;
+            padding: 6px 15px;
+            margin: 0 10px 0 0;
+        }
+
+        .btn-rec:hover {
+            background: var(--alert-pink);
+            color: #000;
+            box-shadow: 0 0 20px var(--alert-pink);
+        }
+
+        .btn-rec.recording {
+            background: var(--alert-pink);
+            color: #fff;
+            animation: pulse-rec 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse-rec {
+
+            0%,
+            100% {
+                box-shadow: 0 0 5px var(--alert-pink);
+            }
+
+            50% {
+                box-shadow: 0 0 25px var(--alert-pink);
+            }
+        }
+
         /* --- GRAPHS --- */
         .graph-area {
             grid-column: span 3;
@@ -264,10 +298,12 @@
 <body>
 
     <header>
-        <h1>NAV-PANEL v5.1</h1>
+        <h1>NAV-PANEL v5.2</h1>
         <div style="display:flex; align-items:center;">
             <span id="status" style="font-size:0.8rem; margin-right:20px; color:#666; font-weight:bold;">●
                 OFFLINE</span>
+            <!-- #11: Record button -->
+            <button id="btnRec" class="btn btn-rec" style="display:none;">● REC</button>
             <button id="btnConn" class="btn btn-connect">CONNECT</button>
         </div>
     </header>
@@ -337,14 +373,15 @@
                 </div>
             </div>
 
+            <!-- #7: Live system health indicators -->
             <div style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top:10px;">
                 <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:5px;">
-                    <span class="label">CPU LOAD</span>
-                    <span style="color:var(--accent-cyan);">NOMINAL</span>
+                    <span class="label">FREE HEAP</span>
+                    <span id="v_heap" style="color:var(--accent-cyan);">—</span>
                 </div>
                 <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
                     <span class="label">CAN BUS</span>
-                    <span style="color:var(--primary-purple);">ACTIVE (1 MBPS)</span>
+                    <span id="v_can" style="color:var(--primary-purple);">WAITING</span>
                 </div>
             </div>
         </div>
@@ -367,7 +404,11 @@
 
     <script>
         // --- VARIABLES ---
-        let reader, tareVal = 0;
+        let reader, port, tareVal = 0;
+
+        // #11: Recording state
+        let isRecording = false;
+        let recordedData = [];
 
         // --- COMMON CHART OPTIONS ---
         const commonOptions = {
@@ -401,22 +442,73 @@
             options: commonOptions
         });
 
-        // --- SERIAL ---
+        // --- TARE ---
         document.getElementById('btnTare').onclick = () => { tareVal = parseFloat(document.getElementById('v_y').innerText); };
 
+        // --- #11: RECORDING ---
+        document.getElementById('btnRec').onclick = () => {
+            if (!isRecording) {
+                // Start recording
+                isRecording = true;
+                recordedData = [];
+                recordedData.push("Timestamp,Pitch,Roll,Yaw,Temp,Pressure,Altitude,FreeHeap,CAN_TxErrors");
+                document.getElementById('btnRec').innerText = "■ STOP";
+                document.getElementById('btnRec').classList.add('recording');
+            } else {
+                // Stop recording & download
+                isRecording = false;
+                document.getElementById('btnRec').innerText = "● REC";
+                document.getElementById('btnRec').classList.remove('recording');
+
+                if (recordedData.length > 1) {
+                    const blob = new Blob([recordedData.join('\n')], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `nav_log_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }
+            }
+        };
+
+        // --- SERIAL CONNECTION (#4 + #10) ---
         document.getElementById('btnConn').onclick = async () => {
             try {
-                const port = await navigator.serial.requestPort();
+                port = await navigator.serial.requestPort();
                 await port.open({ baudRate: 115200 });
-                document.getElementById('status').innerText = "● ONLINE";
-                document.getElementById('status').style.color = "#00f3ff";
-                document.getElementById('btnConn').style.display = 'none';
+                setOnline();
                 const decoder = new TextDecoderStream();
                 port.readable.pipeTo(decoder.writable);
                 reader = decoder.readable.getReader();
-                readLoop();
-            } catch (e) { console.log(e); }
+
+                // #4: Catch disconnect errors
+                readLoop().catch(handleDisconnect);
+            } catch (e) {
+                console.log(e);
+            }
         };
+
+        function setOnline() {
+            document.getElementById('status').innerText = "● ONLINE";
+            document.getElementById('status').style.color = "#00f3ff";
+            document.getElementById('btnConn').style.display = 'none';
+            document.getElementById('btnRec').style.display = 'inline-block';  // #11: Show REC
+        }
+
+        // #4 + #10: Handle disconnect — show status and RECONNECT button
+        function handleDisconnect() {
+            document.getElementById('status').innerText = "● DISCONNECTED";
+            document.getElementById('status').style.color = "#ff0055";
+            document.getElementById('btnConn').innerText = "RECONNECT";
+            document.getElementById('btnConn').style.display = 'inline-block';
+            document.getElementById('btnRec').style.display = 'none';
+
+            // Stop recording if active
+            if (isRecording) {
+                document.getElementById('btnRec').click();
+            }
+        }
 
         async function readLoop() {
             let buffer = "";
@@ -428,6 +520,8 @@
                 buffer = lines.pop();
                 for (let line of lines) if (line.includes(',')) update(line);
             }
+            // Stream ended normally (USB unplugged)
+            handleDisconnect();
         }
 
         function update(line) {
@@ -444,14 +538,40 @@
             document.getElementById('v_press').innerText = d[11].toFixed(0);
             document.getElementById('v_alt').innerText = alt.toFixed(1);
 
-            // --- FIXED ROLL (INVERTED SIGN) ---
-            // Changed "r" to "-r" below to fix the direction
+            // #7: Live system health (fields 13 & 14, if present)
+            if (d.length >= 15) {
+                const freeHeap = d[13];
+                const canErrors = d[14];
+
+                // Free heap display (KB)
+                document.getElementById('v_heap').innerText = (freeHeap / 1024).toFixed(0) + " KB";
+
+                // CAN status — green if 0 errors, red if errors detected
+                const canEl = document.getElementById('v_can');
+                if (canErrors === 0) {
+                    canEl.innerText = "OK (1 MBPS)";
+                    canEl.style.color = "var(--accent-cyan)";
+                } else {
+                    canEl.innerText = "ERR:" + canErrors;
+                    canEl.style.color = "var(--alert-pink)";
+                }
+            }
+
+            // 3D Cube (pitch & roll inverted for CSS convention)
             document.getElementById('cube').style.transform = `rotateX(${-p}deg) rotateY(${y}deg) rotateZ(${-r}deg)`;
 
             // Update Graphs
             updateGraph(chartYaw, y - tareVal);
             updateGraph(chartPitch, p);
             updateGraph(chartRoll, r);
+
+            // #11: Record data line
+            if (isRecording) {
+                const ts = new Date().toISOString();
+                const heap = d.length >= 14 ? d[13] : '';
+                const canE = d.length >= 15 ? d[14] : '';
+                recordedData.push(`${ts},${p},${r},${y},${temp},${d[11]},${alt},${heap},${canE}`);
+            }
         }
 
         function updateGraph(chart, val) {

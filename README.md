@@ -1,4 +1,4 @@
-# 🚁 Industrial AHRS Navigation Module (V5.1)
+# 🚁 Industrial AHRS Navigation Module (V5.2)
 
 ![ESP32-S3](https://img.shields.io/badge/Hardware-ESP32--S3-red?style=for-the-badge&logo=espressif)
 ![Sensor Fusion](https://img.shields.io/badge/Fusion-DMP_225Hz-blue?style=for-the-badge)
@@ -186,6 +186,7 @@ Open `firmware/index.html` in Chrome/Edge → Click **CONNECT** → Select COM p
 | 🏗️ [System Architecture](docs/ARCHITECTURE.md) | FreeRTOS tasks, DMP pipeline, quaternion math, data flow |
 | 🖥️ [Web Dashboard](docs/WEB_DASHBOARD.md) | NAV PANEL v5.1 — panels, 3D cube, tare, CSV parsing |
 | 🔩 [PCB Design](docs/PCB_DESIGN.md) | Circuit block diagram and component BOM |
+| 📋 [Changelog](CHANGELOG.md) | Full version history (v1.0 → v5.2) |
 
 ---
 
