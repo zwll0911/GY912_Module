@@ -2,66 +2,71 @@
 
 [🔙 **Back to Main README**](../README.md)
 
-This document defines the communication protocol for the **Industrial AHRS Navigation Module (V3.0)**.
-The module broadcasts telemetry data at a fixed rate.
+This document defines the communication protocol for the **Industrial AHRS Navigation Module (V5.1)**.
+The module broadcasts orientation telemetry at **50Hz** via the ESP32-S3 TWAI driver.
 
-*   **Baud Rate**: `500 kbps`
-*   **Endianness**: Little Endian (Standard for x86/ARM/ESP32)
+*   **Baud Rate**: `1 Mbps`
+*   **Byte Order**: Big Endian (MSB first)
 *   **Format**: Standard ID (11-bit)
+*   **Target**: Robomaster C620/C610 speed controllers
 
 ---
 
-## 🆔 Message IDs & Payload Definition
+## 🆔 Message Definition
 
-| CAN ID | Description | Data Type | Payload Structure (8 Bytes) | Scaling Factor |
+The module transmits a single CAN frame:
+
+| CAN ID | Description | DLC | Payload Structure (6 Bytes) | Scaling Factor |
 | :--- | :--- | :--- | :--- | :--- |
-| **0x100** | **Raw Accelerometer** | `int16_t` | `[0-1] Ax` `[2-3] Ay` `[4-5] Az` `[6-7] Res` | `/ 1000.0` (G-force) |
-| **0x101** | **Orientation (Euler)** | `int16_t` | `[0-1] Pitch` `[2-3] Roll` `[4-5] Yaw` `[6-7] Res` | `/ 100.0` (Degrees) |
-| **0x102** | **Altitude & Baro** | `int16_t` | `[0-1] Alt` `[2-3] Temp` `[4-7] Reserved` | `/ 100.0` (Meters / °C) |
+| **0x101** | **Orientation (Euler)** | 6 | `[0-1] Yaw` `[2-3] Pitch` `[4-5] Roll` | `/ 100.0` (Degrees) |
 
 > [!NOTE]
-> **Reserved Bytes**: Bytes marked as `Res` or `Reserved` are currently unused and set to `0x00`.
+> Only 6 of 8 available bytes are used. Bytes 6-7 are not transmitted (`data_length_code = 6`).
 
 ---
 
 ## 🧮 Data Interpretation
 
 ### Signed Integers
-All sensor values are transmitted as **signed 16-bit integers** (`int16_t`).
+All orientation values are transmitted as **signed 16-bit integers** (`int16_t`).
 *   **Range**: -32,768 to +32,767
-*   **Example**: A raw value of `-1500` for Pitch corresponds to `-15.00` degrees.
+*   **Example**: A raw value of `14530` for Yaw corresponds to **145.30°**.
+
+### Byte Packing (Big Endian)
+Each `int16_t` is packed MSB-first:
+```cpp
+// From esp32s3.ino
+int16_t y = (int16_t)(robotYaw * 100);
+message.data[0] = (y >> 8) & 0xFF;  // High byte
+message.data[1] = y & 0xFF;         // Low byte
+```
 
 ### Decoding Logic
-To convert the raw CAN bytes back to real-world units:
-
-1.  Combine the **Low Byte** and **High Byte** to form a 16-bit integer.
-2.  Cast to a signed integer type (e.g., `int16_t` in C++ or `short` in C#).
-3.  Divide by the **Scaling Factor**.
+To convert CAN bytes back to degrees:
+1.  Combine bytes: `int16_t raw = (data[0] << 8) | data[1];`
+2.  Convert: `float yaw_deg = raw / 100.0;`
 
 ---
 
 ## 💻 Decoded Data Example (JSON)
 
-Below is an example of what a decoded packet stream might look like on your main computer or dashboard:
-
 ```json
 {
-  "0x100": {
-    "type": "Raw Accel",
-    "ax": 0.045,      // Raw:  45
-    "ay": -0.012,     // Raw: -12
-    "az": 1.002       // Raw: 1002
-  },
   "0x101": {
     "type": "Orientation",
-    "pitch": 2.45,    // Raw: 245
-    "roll": -1.10,    // Raw: -110
-    "yaw": 145.30     // Raw: 14530
-  },
-  "0x102": {
-    "type": "Altitude",
-    "altitude_m": 12.50, // Raw: 1250
-    "temp_c": 34.20      // Raw: 3420
+    "yaw_deg": 145.30,
+    "pitch_deg": 2.45,
+    "roll_deg": -1.10
   }
 }
 ```
+
+---
+
+## ⏱️ Timing
+
+| Parameter | Value |
+| :--- | :--- |
+| **Transmit Rate** | 50Hz (20ms interval) |
+| **Transmit Timeout** | 10ms (`pdMS_TO_TICKS(10)`) |
+| **Task Priority** | 2 (below sensor, above LED) |

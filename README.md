@@ -1,20 +1,20 @@
-# 🚁 Industrial AHRS Navigation Module (V3.0)
+# 🚁 Industrial AHRS Navigation Module (V5.1)
 
 ![ESP32-S3](https://img.shields.io/badge/Hardware-ESP32--S3-red?style=for-the-badge&logo=espressif)
-![Sensor Fusion](https://img.shields.io/badge/Algorithm-Madgwick_100Hz-blue?style=for-the-badge)
+![Sensor Fusion](https://img.shields.io/badge/Algorithm-DMP_225Hz-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-> **High-Precision Flight Controller Core for Advanced Robotics**
+> **High-Precision Navigation Core for Competition Robotics (Robocon)**
 
-The **Industrial AHRS Navigation Module** is a robust sensor fusion engine built on the **ESP32-S3** dual-core MCU. It fuses data from a 9-DOF IMU and a precision barometer to deliver stable, drift-free orientation (Yaw, Pitch, Roll) and altitude telemetry via high-speed CAN Bus.
+The **Industrial AHRS Navigation Module** is a robust sensor fusion engine built on the **ESP32-S3** dual-core MCU. It offloads 6-axis sensor fusion to the **ICM-20948 DMP** (GAME_ROTATION_VECTOR) and integrates a **BMP388** precision barometer to deliver stable, drift-free orientation (Yaw, Pitch, Roll) and environment telemetry via **1 Mbps CAN Bus** (TWAI).
 
 ---
 
-## � Table of Contents
+## 📑 Table of Contents
 
 - [Key Features](#-key-features)
-- [System Status](#-system-status-indicators)
-- [Hardware Specs](#-hardware-specifications)
+- [System Status Indicators](#-system-status-indicators)
+- [Hardware Specs](#️-hardware-specifications)
 - [Quick Start](#-quick-start)
 - [Documentation](#-documentation)
 - [Project Structure](#-project-structure)
@@ -23,31 +23,31 @@ The **Industrial AHRS Navigation Module** is a robust sensor fusion engine built
 
 ## 🚀 Key Features
 
-*   **⚡ Dual-Core Power**: Dedicated cores for real-time sensor fusion (Core 1) and communication/UI (Core 0).
-*   **🎯 Precision Fusion**: 100Hz Madgwick filter update rate ensures responsive and accurate tracking.
-*   **🧠 Auto-Calibration**: Intelligent startup routine zeroes gyroscope drift and corrects hard-iron magnetic distortion.
-*   **bw Robust Telemetry**: Industrial CAN Bus (TWAI) output at **500kbps** for reliable data transmission.
-*   **🌈 Visual Feedback**: Intuitive RGB LED color codes for instant system status monitoring.
+*   **⚡ DMP Sensor Fusion**: Offloaded to the ICM-20948 Digital Motion Processor at **225Hz** (0 ODR divisor) for maximum responsiveness.
+*   **🧠 3-Task FreeRTOS Architecture**: `taskSensor` (Core 1, 200Hz), `taskCAN` (Core 0, 50Hz), `taskLED` (Core 0) — each with dedicated priorities and thread-safe mutex sharing.
+*   **🎯 Yaw Stabilization**: Startup calibration logic eliminates gyro drift for a stable 0.0° heading reference.
+*   **📡 High-Speed CAN Bus**: TWAI driver at **1 Mbps** for communication with Robomaster C620/C610 speed controllers.
+*   **🌡️ Environment Monitoring**: BMP388 precision barometer for live Altitude, Pressure, and Temperature.
+*   **🌈 Dual LED Status**: Rainbow cycle (Pin 1) for system idle + Neon Purple heartbeat (Pin 48) for CPU alive.
 
-## � System Status Indicators
+## 💡 System Status Indicators
 
-The module uses RGB LEDs to communicate its current state.
+The module uses dual RGB LEDs to communicate its current state.
 
-| Color | Pattern | System State | Action Required |
+| LED | Pin | Pattern | System State |
 | :--- | :--- | :--- | :--- |
-| 🟠 **Orange** | **Solid** | **Calibrating** | **Keep module still** (~10s) |
-| 🟢 **Green** | **Flash** | **Ready** | Calibration complete, ready to fly |
-| 🟣 **Purple** | **Breathing** | **Active / Idle** | Normal operation |
-| 🟣 **Purple** | **Fast Flash** | **Transmitting** | Sending telemetry data |
+| 🌈 **External** | **1** | **Rainbow Cycle** (HSV loop) | System Idle / Ready |
+| 🟣 **Onboard** | **48** | **Purple Blink** (0.5Hz) | CPU Alive / Heartbeat |
+| 🔴 **Onboard** | **48** | **Solid Red** | DMP Init Failure |
 
 ## 🛠️ Hardware Specifications
 
 | Component | Model | Function | Bus Interface |
 | :--- | :--- | :--- | :--- |
 | **MCU** | [ESP32-S3 SuperMini](https://www.espressif.com/en/products/socs/esp32-s3) | Main Processor | - |
-| **IMU** | **ICM-20948** | 9-DOF Accel/Gyro/Mag | SPI (High Speed) |
+| **IMU** | **ICM-20948** | 6-DOF Accel/Gyro (DMP Fusion) | SPI (High Speed) |
 | **Barometer** | **BMP388** | Precision Altitude | SPI |
-| **Transceiver** | **SN65HVD230** | CAN Bus Interface | UART |
+| **Transceiver** | **SN65HVD230** | CAN Bus Interface | TWAI |
 
 ## ⚡ Quick Start
 
@@ -64,23 +64,23 @@ Connect your sensors as per the [Hardware Guide](docs/HARDWARE.md). **Ensure 3.3
 Use **PlatformIO** to compile and upload the firmware to your ESP32-S3.
 
 ### 4. Connect CAN
-Hook up the `CAN H` and `CAN L` lines to your robot's bus network (500kbps).
+Hook up the `CAN H` and `CAN L` lines to your robot's bus network (**1 Mbps**).
 
-## � Documentation
+## 📚 Documentation
 
 Detailed documentation is available in the `docs/` directory:
 
 *   📖 **[Hardware & Pinout Guide](docs/HARDWARE.md)** - Wiring diagrams and pin maps.
 *   📡 **[CAN Protocol Specification](docs/CAN_PROTOCOL.md)** - Message IDs and data formats.
-*   🏗️ **[System Architecture](docs/ARCHITECTURE.md)** - Internal design and data flow.
-*   🖥️ **[Web Dashboard Guide](docs/WEB_DASHBOARD.md)** - Real-time telemetry UI and flight recorder.
+*   🏗️ **[System Architecture](docs/ARCHITECTURE.md)** - FreeRTOS task design and data flow.
+*   🖥️ **[Web Dashboard Guide](docs/WEB_DASHBOARD.md)** - Real-time telemetry UI.
 *   🔩 **[PCB Design](docs/PCB_DESIGN.md)** - Circuit block diagram and component BOM.
 
 ## 📂 Project Structure
 
 ```text
 .
-├── firmware/       # ESP32-S3 Source Code
+├── firmware/       # ESP32-S3 Source Code & Web Dashboard
 ├── docs/           # Documentation Resources
 ├── v1/             # KiCad PCB Design Files
 └── README.md       # This file

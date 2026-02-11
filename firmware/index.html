@@ -3,562 +3,462 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>NAV FLIGHT RECORDER</title>
-    <script src="chart.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NAV PANEL</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        :root {
+            --primary-purple: #bd00ff;
+            --accent-cyan: #00f3ff;
+            --alert-pink: #ff0055;
+            --bg-dark: #05000a;
+            --panel-bg: rgba(18, 2, 28, 0.9);
+            --text-dim: #9e8fb2;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
+            background-color: var(--bg-dark);
+            color: #fff;
+            font-family: 'Segoe UI', 'Verdana', sans-serif;
             margin: 0;
-            background: #121212;
-            color: #00ff41;
-            font-family: 'Segoe UI', monospace;
-            overflow-y: auto;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background-image:
+                linear-gradient(rgba(189, 0, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(189, 0, 255, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        /* HEADER */
-        .header {
+        /* --- HEADER --- */
+        header {
+            height: 55px;
+            background: rgba(10, 0, 15, 0.95);
+            border-bottom: 2px solid var(--primary-purple);
+            padding: 0 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 2px solid #333;
-            padding-bottom: 15px;
-            margin-bottom: 20px;
-            position: sticky;
-            top: 0;
-            background: #121212;
-            z-index: 100;
+            box-shadow: 0 0 15px rgba(189, 0, 255, 0.3);
+            flex-shrink: 0;
         }
 
-        /* BUTTONS */
-        .btn-group {
-            display: flex;
-            gap: 10px;
+        h1 {
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            margin: 0;
+            background: linear-gradient(90deg, #fff, var(--primary-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
         }
 
-        button {
-            background: #222;
-            color: #fff;
-            border: 1px solid #555;
-            padding: 10px 20px;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 4px;
-            transition: 0.2s;
-            font-family: monospace;
-        }
-
-        button:hover {
-            background: #444;
-        }
-
-        #btnConn:hover {
-            background: #00ff41;
-            color: #000;
-        }
-
-        /* RECORDER BUTTON STYLES */
-        #btnRec {
-            color: #ff5252;
-            border-color: #ff5252;
-        }
-
-        #btnRec.recording {
-            background: #ff5252;
-            color: #000;
-            animation: pulse 1s infinite;
-        }
-
-        @keyframes pulse {
-            0% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.5;
-            }
-
-            100% {
-                opacity: 1;
-            }
-        }
-
-        /* DASHBOARD GRID */
+        /* --- DASHBOARD GRID --- */
         .dashboard {
+            flex-grow: 1;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-            gap: 20px;
+            grid-template-columns: 300px 1fr 300px;
+            grid-template-rows: 60% 40%;
+            gap: 15px;
+            padding: 15px;
         }
 
-        /* PANELS */
         .panel {
-            background: #1a1a1a;
-            border: 1px solid #333;
+            background: var(--panel-bg);
+            border: 1px solid rgba(189, 0, 255, 0.3);
             border-radius: 8px;
             padding: 15px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
         }
 
-        .panel-head {
+        h2 {
+            font-size: 0.8rem;
+            color: var(--primary-purple);
+            border-bottom: 1px solid rgba(189, 0, 255, 0.3);
+            padding-bottom: 5px;
+            margin: 0 0 10px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 700;
+        }
+
+        /* --- DATA VALUES --- */
+        .data-box {
+            background: rgba(255, 255, 255, 0.03);
+            border-left: 4px solid var(--accent-cyan);
+            padding: 10px;
+            margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
-            border-bottom: 1px solid #333;
-            margin-bottom: 15px;
-            padding-bottom: 5px;
-            color: #888;
-            font-size: 14px;
-            font-weight: bold;
-        }
-
-        .vals {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .v-box {
-            background: #000;
-            padding: 8px;
+            align-items: center;
             border-radius: 4px;
-            text-align: center;
         }
 
-        .lbl {
-            font-size: 11px;
-            color: #666;
-            display: block;
-            margin-bottom: 2px;
+        .label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            font-weight: 600;
+            letter-spacing: 1px;
         }
 
-        .num {
-            font-size: 20px;
+        .value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
+            font-family: 'Consolas', monospace;
+        }
+
+        .value-md {
+            font-size: 1.4rem;
+            color: #fff;
             font-weight: bold;
         }
 
-        .chart-box {
-            height: 250px;
-            width: 100%;
-            position: relative;
+        .unit {
+            font-size: 0.8rem;
+            color: var(--primary-purple);
+            margin-left: 5px;
         }
 
-        canvas {
-            width: 100% !important;
-            height: 100% !important;
-        }
-
-        /* COLORS */
-        .c-acc {
-            color: #ff5252;
-        }
-
-        .b-acc {
-            border-top: 4px solid #ff5252;
-        }
-
-        .c-gyr {
-            color: #448aff;
-        }
-
-        .b-gyr {
-            border-top: 4px solid #448aff;
-        }
-
-        .c-mag {
-            color: #ffd740;
-        }
-
-        .b-mag {
-            border-top: 4px solid #ffd740;
-        }
-
-        .c-bar {
-            color: #69f0ae;
-        }
-
-        .b-bar {
-            border-top: 4px solid #69f0ae;
-        }
-
-        .connected {
-            color: #00ff41 !important;
-            text-shadow: 0 0 10px #00ff41;
-        }
-
-        /* 3D ORIENTATION */
-        .orient-container {
+        /* --- 3D CUBE --- */
+        #sim-container {
+            flex-grow: 1;
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 40px;
-            padding: 10px 0;
+            perspective: 900px;
+            background: radial-gradient(circle, rgba(189, 0, 255, 0.08) 0%, transparent 70%);
         }
 
-        .scene {
-            width: 160px;
-            height: 160px;
-            perspective: 500px;
-        }
-
-        .cube {
-            width: 100%;
-            height: 100%;
+        #cube {
+            width: 180px;
+            height: 180px;
             position: relative;
             transform-style: preserve-3d;
-            transition: transform 0.08s ease-out;
+            transition: transform 0.05s linear;
         }
 
         .face {
             position: absolute;
-            width: 160px;
-            height: 160px;
-            border: 1px solid rgba(0, 255, 65, 0.3);
+            width: 180px;
+            height: 180px;
+            background: rgba(189, 0, 255, 0.1);
+            border: 2px solid var(--primary-purple);
+            box-shadow: 0 0 20px var(--primary-purple);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 14px;
+            font-size: 0.9rem;
+            color: var(--primary-purple);
             font-weight: bold;
-            opacity: 0.85;
             backface-visibility: visible;
         }
 
-        .face.front {
-            background: rgba(0, 255, 65, 0.15);
-            transform: translateZ(80px);
-            color: #00ff41;
+        .front {
+            transform: translateZ(90px);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            box-shadow: 0 0 25px var(--accent-cyan);
         }
 
-        .face.back {
-            background: rgba(255, 82, 82, 0.15);
-            transform: rotateY(180deg) translateZ(80px);
-            color: #ff5252;
+        .back {
+            transform: rotateY(180deg) translateZ(90px);
         }
 
-        .face.right {
-            background: rgba(68, 138, 255, 0.15);
-            transform: rotateY(90deg) translateZ(80px);
-            color: #448aff;
+        .right {
+            transform: rotateY(90deg) translateZ(90px);
         }
 
-        .face.left {
-            background: rgba(68, 138, 255, 0.15);
-            transform: rotateY(-90deg) translateZ(80px);
-            color: #448aff;
+        .left {
+            transform: rotateY(-90deg) translateZ(90px);
         }
 
-        .face.top {
-            background: rgba(255, 215, 64, 0.15);
-            transform: rotateX(90deg) translateZ(80px);
-            color: #ffd740;
+        .top {
+            transform: rotateX(90deg) translateZ(90px);
+            background: rgba(255, 255, 255, 0.05);
         }
 
-        .face.bottom {
-            background: rgba(255, 215, 64, 0.15);
-            transform: rotateX(-90deg) translateZ(80px);
-            color: #ffd740;
+        .bottom {
+            transform: rotateX(-90deg) translateZ(90px);
         }
 
-        .orient-vals {
+        /* --- BUTTONS --- */
+        .btn {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255, 0, 85, 0.1);
+            border: 1px solid var(--alert-pink);
+            color: var(--alert-pink);
+            font-weight: 800;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+            transition: 0.2s;
+            margin-top: auto;
+        }
+
+        .btn:hover {
+            background: var(--alert-pink);
+            color: #000;
+            box-shadow: 0 0 20px var(--alert-pink);
+        }
+
+        .btn-connect {
+            background: rgba(0, 243, 255, 0.1);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            width: auto;
+            padding: 6px 15px;
+            margin: 0;
+        }
+
+        .btn-connect:hover {
+            background: var(--accent-cyan);
+            color: #000;
+            box-shadow: 0 0 20px var(--accent-cyan);
+        }
+
+        /* --- GRAPHS --- */
+        .graph-area {
+            grid-column: span 3;
             display: grid;
-            grid-template-columns: 1fr;
-            gap: 10px;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
         }
 
-        .orient-val {
-            background: #000;
-            padding: 10px 25px;
+        .graph-panel {
+            background: rgba(0, 0, 0, 0.3);
             border-radius: 4px;
-            text-align: center;
-            min-width: 120px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .graph-title {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .graph-wrapper {
+            position: relative;
+            flex-grow: 1;
+            min-height: 0;
         }
     </style>
 </head>
 
 <body>
 
-    <div class="container">
-        <div class="header">
-            <div>
-                <h2 style="margin:0">NAV MISSION CONTROL</h2>
-                <div id="status" style="color:#666; font-size:12px; margin-top:5px">SYSTEM OFFLINE</div>
+    <header>
+        <h1>NAV-PANEL v5.1</h1>
+        <div style="display:flex; align-items:center;">
+            <span id="status" style="font-size:0.8rem; margin-right:20px; color:#666; font-weight:bold;">●
+                OFFLINE</span>
+            <button id="btnConn" class="btn btn-connect">CONNECT</button>
+        </div>
+    </header>
+
+    <div class="dashboard">
+        <div class="panel">
+            <h2>Primary Navigation</h2>
+
+            <div class="data-box" style="border-left-color: var(--primary-purple);">
+                <span class="label">HEADING</span>
+                <div><span id="v_y" class="value">0.00</span><span class="unit">°</span></div>
             </div>
 
-            <div style="text-align:center">
-                <span style="color:#888; font-size:12px">CORE TEMP</span><br>
-                <span id="v_temp" style="font-size:28px; font-weight:bold; color:#fff">--.-</span> <span
-                    style="color:#666">°C</span>
+            <div class="data-box">
+                <span class="label">RELATIVE</span>
+                <div><span id="v_yr" class="value" style="color:var(--accent-cyan);">0.00</span><span
+                        class="unit">°</span></div>
             </div>
 
-            <div class="btn-group">
-                <button id="btnRec" disabled>🔴 REC</button>
-                <button id="btnSim" style="background:#1a237e; border-color:#448aff;">🎮 SIMULATE</button>
-                <button id="btnConn">🔌 CONNECT</button>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:5px;">
+                <div style="text-align:center;">
+                    <span class="label">PITCH</span><br>
+                    <span id="v_p" class="value-md">0.0</span>
+                </div>
+                <div style="text-align:center;">
+                    <span class="label">ROLL</span><br>
+                    <span id="v_r" class="value-md">0.0</span>
+                </div>
             </div>
+
+            <button id="btnTare" class="btn">TARE ZERO POINT</button>
         </div>
 
-        <div class="dashboard">
-            <div class="panel b-acc">
-                <div class="panel-head"><span class="c-acc">ACCELEROMETER</span> <span>m/s²</span></div>
-                <div class="vals">
-                    <div class="v-box"><span class="lbl">AX (SURGE)</span><span class="num c-acc" id="v_ax">0.00</span>
-                    </div>
-                    <div class="v-box"><span class="lbl">AY (SWAY)</span><span class="num c-acc" id="v_ay">0.00</span>
-                    </div>
-                    <div class="v-box"><span class="lbl">AZ (HEAVE)</span><span class="num c-acc" id="v_az">0.00</span>
-                    </div>
-                </div>
-                <div class="chart-box"><canvas id="cAcc"></canvas></div>
+        <div class="panel" style="padding: 0;">
+            <div style="position: absolute; top: 10px; left: 15px; z-index: 10;">
+                <h2>Spatial Awareness</h2>
             </div>
-
-            <div class="panel b-gyr">
-                <div class="panel-head"><span class="c-gyr">GYROSCOPE</span> <span>deg/s</span></div>
-                <div class="vals">
-                    <div class="v-box"><span class="lbl">GX (ROLL)</span><span class="num c-gyr" id="v_gx">0.00</span>
-                    </div>
-                    <div class="v-box"><span class="lbl">GY (PITCH)</span><span class="num c-gyr" id="v_gy">0.00</span>
-                    </div>
-                    <div class="v-box"><span class="lbl">GZ (YAW)</span><span class="num c-gyr" id="v_gz">0.00</span>
-                    </div>
-                </div>
-                <div class="chart-box"><canvas id="cGyr"></canvas></div>
-            </div>
-
-            <div class="panel b-mag">
-                <div class="panel-head"><span class="c-mag">MAGNETOMETER</span> <span>uT</span></div>
-                <div class="vals">
-                    <div class="v-box"><span class="lbl">MX (NORTH)</span><span class="num c-mag" id="v_mx">0.00</span>
-                    </div>
-                    <div class="v-box"><span class="lbl">MY (EAST)</span><span class="num c-mag" id="v_my">0.00</span>
-                    </div>
-                    <div class="v-box"><span class="lbl">MZ (DOWN)</span><span class="num c-mag" id="v_mz">0.00</span>
-                    </div>
-                </div>
-                <div class="chart-box"><canvas id="cMag"></canvas></div>
-            </div>
-
-            <div class="panel b-bar">
-                <div class="panel-head"><span class="c-bar">ALTIMETER</span> <span>m / hPa</span></div>
-                <div class="vals" style="grid-template-columns: 1fr 1fr;">
-                    <div class="v-box"><span class="lbl">ALTITUDE</span><span class="num c-bar" id="v_alt">0.00</span>
-                        <span style="font-size:12px; color:#555">m</span>
-                    </div>
-                    <div class="v-box"><span class="lbl">PRESSURE</span><span class="num c-bar" id="v_press">0.00</span>
-                        <span style="font-size:12px; color:#555">hPa</span>
-                    </div>
-                </div>
-                <div class="chart-box"><canvas id="cBar"></canvas></div>
-            </div>
-
-            <div class="panel" style="border-top: 4px solid #00ff41; grid-column: 1 / -1;">
-                <div class="panel-head"><span style="color:#00ff41">3D ORIENTATION</span> <span>Pitch / Roll /
-                        Yaw</span></div>
-                <div class="orient-container">
-                    <div class="scene">
-                        <div class="cube" id="cube3d">
-                            <div class="face front">FRONT</div>
-                            <div class="face back">BACK</div>
-                            <div class="face right">RIGHT</div>
-                            <div class="face left">LEFT</div>
-                            <div class="face top">TOP</div>
-                            <div class="face bottom">BOT</div>
-                        </div>
-                    </div>
-                    <div class="orient-vals">
-                        <div class="orient-val"><span class="lbl">PITCH</span><span class="num" id="v_pitch"
-                                style="color:#ff5252">0.0°</span></div>
-                        <div class="orient-val"><span class="lbl">ROLL</span><span class="num" id="v_roll"
-                                style="color:#448aff">0.0°</span></div>
-                        <div class="orient-val"><span class="lbl">YAW / HEADING</span><span class="num" id="v_yaw"
-                                style="color:#ffd740">0.0°</span></div>
-                    </div>
+            <div id="sim-container">
+                <div id="cube">
+                    <div class="face front">FRONT</div>
+                    <div class="face back">BACK</div>
+                    <div class="face right">RIGHT</div>
+                    <div class="face left">LEFT</div>
+                    <div class="face top">TOP</div>
+                    <div class="face bottom">BOTTOM</div>
                 </div>
             </div>
         </div>
 
-        <div style="text-align:center; color:#444; margin-top:30px; padding-bottom:20px; font-size:12px;">
-            INDUSTRIAL NAV MODULE V2.1 • FLIGHT RECORDER ENABLED
+        <div class="panel">
+            <h2>Environment</h2>
+            <div class="data-box" style="border-left-color: var(--alert-pink);">
+                <span class="label">ALTITUDE</span>
+                <div><span id="v_alt" class="value" style="color:#fff;">0.0</span><span class="unit">m</span></div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px; padding:0 5px;">
+                <div>
+                    <span class="label">TEMP</span><br>
+                    <span id="v_temp" class="value-md" style="color:var(--text-dim); font-size:1.2rem;">0.0</span><span
+                        class="unit">°C</span>
+                </div>
+                <div style="text-align:right;">
+                    <span class="label">PRESSURE</span><br>
+                    <span id="v_press" class="value-md" style="color:var(--text-dim); font-size:1.2rem;">0</span><span
+                        class="unit">hPa</span>
+                </div>
+            </div>
+
+            <div style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top:10px;">
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:5px;">
+                    <span class="label">CPU LOAD</span>
+                    <span style="color:var(--accent-cyan);">NOMINAL</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
+                    <span class="label">CAN BUS</span>
+                    <span style="color:var(--primary-purple);">ACTIVE (1 MBPS)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel graph-area">
+            <div class="graph-panel">
+                <div class="graph-title" style="color:var(--accent-cyan)">YAW STABILITY</div>
+                <div class="graph-wrapper"><canvas id="chartYaw"></canvas></div>
+            </div>
+            <div class="graph-panel">
+                <div class="graph-title" style="color:var(--primary-purple)">PITCH</div>
+                <div class="graph-wrapper"><canvas id="chartPitch"></canvas></div>
+            </div>
+            <div class="graph-panel">
+                <div class="graph-title" style="color:var(--alert-pink)">ROLL</div>
+                <div class="graph-wrapper"><canvas id="chartRoll"></canvas></div>
+            </div>
         </div>
     </div>
 
     <script>
-        const MAX = 100;
-        const dAcc = { x: new Array(MAX).fill(0), y: new Array(MAX).fill(0), z: new Array(MAX).fill(0) };
-        const dGyr = { x: new Array(MAX).fill(0), y: new Array(MAX).fill(0), z: new Array(MAX).fill(0) };
-        const dMag = { x: new Array(MAX).fill(0), y: new Array(MAX).fill(0), z: new Array(MAX).fill(0) };
-        const dBar = { x: new Array(MAX).fill(0), y: new Array(MAX).fill(0) }; // x=Alt, y=Press
+        // --- VARIABLES ---
+        let reader, tareVal = 0;
 
-        // --- RECORDER VARS ---
-        let isRecording = false;
-        let flightLog = [];
-        const btnRec = document.getElementById('btnRec');
-
-        // Chart Settings
-        Chart.defaults.borderColor = '#333';
-        Chart.defaults.color = '#666';
-        const cOpts = {
-            responsive: true, maintainAspectRatio: false, animation: false,
-            elements: { point: { radius: 0 }, line: { borderWidth: 2, tension: 0.1 } },
-            scales: { x: { display: false }, y: { grid: { color: '#222' }, ticks: { color: '#555' } } },
-            plugins: { legend: { display: false } }
+        // --- COMMON CHART OPTIONS ---
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { display: false },
+                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#666', font: { size: 9 } } }
+            },
+            animation: false,
+            elements: { point: { radius: 0 } }
         };
 
-        function mkChart(ctx, dObj, c1, c2, c3) {
-            let sets = [{ borderColor: c1, data: dObj.x }, { borderColor: c2, data: dObj.y }];
-            if (c3) sets.push({ borderColor: c3, data: dObj.z });
-            return new Chart(ctx, { type: 'line', options: cOpts, data: { labels: new Array(MAX).fill(0), datasets: sets } });
-        }
+        // --- INIT CHARTS ---
+        const chartYaw = new Chart(document.getElementById('chartYaw'), {
+            type: 'line',
+            data: { labels: Array(40).fill(''), datasets: [{ data: Array(40).fill(0), borderColor: '#00f3ff', borderWidth: 2, tension: 0.3 }] },
+            options: commonOptions
+        });
 
-        const cA = mkChart(document.getElementById('cAcc'), dAcc, '#ff5252', '#ff8a80', '#b71c1c');
-        const cG = mkChart(document.getElementById('cGyr'), dGyr, '#448aff', '#82b1ff', '#2962ff');
-        const cM = mkChart(document.getElementById('cMag'), dMag, '#ffd740', '#ffe57f', '#ff6f00');
-        const cB = mkChart(document.getElementById('cBar'), dBar, '#69f0ae', '#004d40');
+        const chartPitch = new Chart(document.getElementById('chartPitch'), {
+            type: 'line',
+            data: { labels: Array(40).fill(''), datasets: [{ data: Array(40).fill(0), borderColor: '#bd00ff', borderWidth: 2, tension: 0.3 }] },
+            options: commonOptions
+        });
 
-        function update() {
-            if (conn) {
-                set('v_ax', dAcc.x); set('v_ay', dAcc.y); set('v_az', dAcc.z);
-                set('v_gx', dGyr.x); set('v_gy', dGyr.y); set('v_gz', dGyr.z);
-                set('v_mx', dMag.x); set('v_my', dMag.y); set('v_mz', dMag.z);
-                set('v_alt', dBar.x); set('v_press', dBar.y);
-                cA.update(); cG.update(); cM.update(); cB.update();
+        const chartRoll = new Chart(document.getElementById('chartRoll'), {
+            type: 'line',
+            data: { labels: Array(40).fill(''), datasets: [{ data: Array(40).fill(0), borderColor: '#ff0055', borderWidth: 2, tension: 0.3 }] },
+            options: commonOptions
+        });
 
-                // 3D Orientation from Accel (Pitch/Roll) + Mag (Yaw)
-                let ax = dAcc.x[MAX - 1], ay = dAcc.y[MAX - 1], az = dAcc.z[MAX - 1];
-                let mx = dMag.x[MAX - 1], my = dMag.y[MAX - 1];
-                let pitch = Math.atan2(-ax, Math.sqrt(ay * ay + az * az)) * 180 / Math.PI;
-                let roll = Math.atan2(ay, az) * 180 / Math.PI;
-                let yaw = Math.atan2(my, mx) * 180 / Math.PI;
-                document.getElementById('cube3d').style.transform = `rotateX(${pitch}deg) rotateZ(${roll}deg) rotateY(${yaw}deg)`;
-                document.getElementById('v_pitch').innerText = pitch.toFixed(1) + '°';
-                document.getElementById('v_roll').innerText = roll.toFixed(1) + '°';
-                document.getElementById('v_yaw').innerText = yaw.toFixed(1) + '°';
-            }
-            requestAnimationFrame(update);
-        }
-        function set(id, arr) { document.getElementById(id).innerText = arr[MAX - 1].toFixed(2); }
+        // --- SERIAL ---
+        document.getElementById('btnTare').onclick = () => { tareVal = parseFloat(document.getElementById('v_y').innerText); };
 
-        let reader, conn = false, simInterval = null;
-
-        // --- SIMULATE BUTTON ---
-        document.getElementById('btnSim').onclick = () => {
-            if (simInterval) {
-                clearInterval(simInterval);
-                simInterval = null;
-                conn = false;
-                document.getElementById('btnSim').innerHTML = '🎮 SIMULATE';
-                document.getElementById('btnSim').style.background = '#1a237e';
-                document.getElementById('status').innerText = 'SYSTEM OFFLINE';
-                document.getElementById('status').classList.remove('connected');
-                btnRec.disabled = true;
-                return;
-            }
-            conn = true;
-            document.getElementById('status').innerText = 'SIMULATION MODE';
-            document.getElementById('status').classList.add('connected');
-            document.getElementById('btnSim').innerHTML = '⏹ STOP SIM';
-            document.getElementById('btnSim').style.background = '#b71c1c';
-            btnRec.disabled = false;
-            let t = 0;
-            simInterval = setInterval(() => {
-                t += 0.1;
-                let n = () => (Math.random() - 0.5) * 0.02;
-                let ax = (Math.sin(t * 0.5) * 0.3 + n()).toFixed(3);
-                let ay = (Math.cos(t * 0.7) * 0.2 + n()).toFixed(3);
-                let az = (0.98 + Math.sin(t * 0.3) * 0.05 + n()).toFixed(3);
-                let gx = (Math.sin(t) * 5 + n() * 50).toFixed(2);
-                let gy = (Math.cos(t * 1.3) * 8 + n() * 50).toFixed(2);
-                let gz = (Math.sin(t * 0.2) * 3 + n() * 50).toFixed(2);
-                let mx = (25 * Math.cos(t * 0.1) + n() * 100).toFixed(2);
-                let my = (40 * Math.sin(t * 0.1) + n() * 100).toFixed(2);
-                let mz = (5 + n() * 10).toFixed(2);
-                let temp = (32 + Math.sin(t * 0.05) * 2).toFixed(1);
-                let press = (1013.25 + Math.sin(t * 0.02) * 0.5).toFixed(2);
-                let alt = (15 + Math.sin(t * 0.08) * 5).toFixed(2);
-                parse(`${ax},${ay},${az},${gx},${gy},${gz},${mx},${my},${mz},${temp},${press},${alt}`);
-            }, 10);
-            update();
-        };
-
-        // --- CONNECT BUTTON ---
         document.getElementById('btnConn').onclick = async () => {
             try {
-                const p = await navigator.serial.requestPort();
-                await p.open({ baudRate: 115200 });
-                document.getElementById('status').innerText = "SYSTEM ONLINE • READY";
-                document.getElementById('status').classList.add('connected');
+                const port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
+                document.getElementById('status').innerText = "● ONLINE";
+                document.getElementById('status').style.color = "#00f3ff";
                 document.getElementById('btnConn').style.display = 'none';
-                document.getElementById('btnSim').style.display = 'none';
-                btnRec.disabled = false;
-                conn = true;
-                const d = new TextDecoderStream(); p.readable.pipeTo(d.writable);
-                reader = d.readable.getReader();
-                update(); read();
-            } catch (e) { alert("Error: " + e); }
+                const decoder = new TextDecoderStream();
+                port.readable.pipeTo(decoder.writable);
+                reader = decoder.readable.getReader();
+                readLoop();
+            } catch (e) { console.log(e); }
         };
 
-        // --- RECORD BUTTON ---
-        btnRec.onclick = () => {
-            if (!isRecording) {
-                // START RECORDING
-                isRecording = true;
-                flightLog = ["Timestamp,Ax,Ay,Az,Gx,Gy,Gz,Mx,My,Mz,Temp,Press,Alt"]; // Reset & Add Header
-                btnRec.innerHTML = "⬛ STOP";
-                btnRec.classList.add('recording');
-            } else {
-                // STOP & SAVE
-                isRecording = false;
-                btnRec.innerHTML = "🔴 REC";
-                btnRec.classList.remove('recording');
-                saveCSV();
-            }
-        };
-
-        function saveCSV() {
-            if (flightLog.length < 2) return; // No data
-            const blob = new Blob([flightLog.join('\n')], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            a.href = url;
-            a.download = `flight_log_${timestamp}.csv`;
-            a.click();
-            window.URL.revokeObjectURL(url);
-        }
-
-        async function read() {
-            let b = "";
+        async function readLoop() {
+            let buffer = "";
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
-                b += value;
-                let lines = b.split('\n');
-                b = lines.pop();
-                for (let l of lines) parse(l.trim());
+                buffer += value;
+                let lines = buffer.split('\n');
+                buffer = lines.pop();
+                for (let line of lines) if (line.includes(',')) update(line);
             }
         }
 
-        function parse(l) {
-            let p = l.split(',');
-            if (p.length < 12) return;
+        function update(line) {
+            const d = line.split(',').map(Number);
+            if (d.length < 13) return;
 
-            // Push to Arrays for Graph
-            push(dAcc.x, p[0]); push(dAcc.y, p[1]); push(dAcc.z, p[2]);
-            push(dGyr.x, p[3]); push(dGyr.y, p[4]); push(dGyr.z, p[5]);
-            push(dMag.x, p[6]); push(dMag.y, p[7]); push(dMag.z, p[8]);
-            document.getElementById('v_temp').innerText = parseFloat(p[9]).toFixed(1);
-            push(dBar.y, p[10]);
-            push(dBar.x, p[11]);
+            const p = d[3], r = d[4], y = d[5], temp = d[10], alt = d[12];
 
-            // LOG TO MEMORY IF RECORDING
-            if (isRecording) {
-                let now = new Date().toISOString();
-                flightLog.push(`${now},${l}`);
-            }
+            document.getElementById('v_y').innerText = y.toFixed(2);
+            document.getElementById('v_yr').innerText = (y - tareVal).toFixed(2);
+            document.getElementById('v_p').innerText = p.toFixed(1);
+            document.getElementById('v_r').innerText = r.toFixed(1);
+            document.getElementById('v_temp').innerText = temp.toFixed(1);
+            document.getElementById('v_press').innerText = d[11].toFixed(0);
+            document.getElementById('v_alt').innerText = alt.toFixed(1);
+
+            // --- FIXED ROLL (INVERTED SIGN) ---
+            // Changed "r" to "-r" below to fix the direction
+            document.getElementById('cube').style.transform = `rotateX(${-p}deg) rotateY(${y}deg) rotateZ(${-r}deg)`;
+
+            // Update Graphs
+            updateGraph(chartYaw, y - tareVal);
+            updateGraph(chartPitch, p);
+            updateGraph(chartRoll, r);
         }
-        function push(a, v) { a.shift(); a.push(parseFloat(v)); }
+
+        function updateGraph(chart, val) {
+            chart.data.datasets[0].data.push(val);
+            chart.data.datasets[0].data.shift();
+            chart.update();
+        }
     </script>
 </body>
 

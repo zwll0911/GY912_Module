@@ -6,8 +6,8 @@ This directory contains the ESP32-S3 firmware and ground control station files.
 
 | File/Folder | Description |
 | :--- | :--- |
-| `esp32s3/` | PlatformIO project (main firmware) |
-| `index.html` | Web Serial Dashboard (NAV Mission Control) |
+| `esp32s3/` | Arduino project (main firmware) |
+| `index.html` | Web Serial Dashboard (NAV PANEL v5.1) |
 | `chart.js` | Chart.js library (bundled locally for offline use) |
 
 ## 🚀 Flashing the Firmware
@@ -31,12 +31,14 @@ Serial.begin(115200);
 ```
 
 ### Calibration
-- **Gyro Zero**: Automatic on boot (10-second startup, keep module still).
-- **Hard Iron Offsets**: Adjust magnetometer offsets in the code for your location.
+- **DMP Initialization**: The ICM-20948 DMP is initialized on boot with `GAME_ROTATION_VECTOR` enabled.
+- **Gyro Zeroing**: Startup calibration logic eliminates drift — keep the module still during boot.
+- **Failure Indicator**: Onboard LED turns solid **red** if DMP initialization fails.
 
 ### CAN Bus
-- Speed: **500 kbps**
+- Speed: **1 Mbps**
 - TX Pin: `GPIO 5`, RX Pin: `GPIO 6`
+- Driver: ESP32-S3 TWAI (built-in)
 
 ## 🖥️ Using the Dashboard
 See the [Web Dashboard Guide](../docs/WEB_DASHBOARD.md) for instructions.

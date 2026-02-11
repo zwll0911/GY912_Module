@@ -1,13 +1,12 @@
 #include <Arduino.h>
 #include <SPI.h>
-#include <ICM_20948.h>       
+#include <ICM_20948.h> 
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP3XX.h> 
 #include <Adafruit_NeoPixel.h>
-#include <MadgwickAHRS.h> 
-#include "driver/twai.h"
+#include "driver/twai.h" 
 
-// --- HARDWARE ---
+// --- PINS ---
 #define PIN_SPI_SCK    12
 #define PIN_SPI_MISO   13
 #define PIN_SPI_MOSI   11
@@ -15,232 +14,190 @@
 #define PIN_CS_BARO    9
 #define PIN_CAN_TX     5
 #define PIN_CAN_RX     6
-#define PIN_LED_ONBOARD 48  
-#define PIN_LED_EXTERNAL 1  
+#define PIN_LED_EXT    1  // Rainbow LED
+#define PIN_LED_OB     48 // Blinking Purple LED
 
-// --- OBJECTS ---
-ICM_20948_SPI myICM; 
-Adafruit_BMP3XX bmp; 
-Madgwick filter; 
+// --- OBJECTS & GLOBALS ---
+ICM_20948_SPI myICM;
+Adafruit_BMP3XX bmp;
 
-Adafruit_NeoPixel onboardLED(1, PIN_LED_ONBOARD, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel externalLED(1, PIN_LED_EXTERNAL, NEO_GRB + NEO_KHZ800);
+// Create two separate LED instances
+Adafruit_NeoPixel extLED(1, PIN_LED_EXT, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel obLED(1, PIN_LED_OB, NEO_GRB + NEO_KHZ800);
 
-// --- VARIABLES ---
-float seaLevelPressure = 1013.25;
+// Shared variables
+float robotYaw = 0;
+float robotPitch = 0;
+float robotRoll = 0;
+SemaphoreHandle_t dataMutex;
 
-// Calibration Storage
-float gyroBiasX = 0, gyroBiasY = 0, gyroBiasZ = 0;
-// YOUR MAG BIAS (From previous step)
-float magBiasX = -0.08; 
-float magBiasY = -18.53;
-float magBiasZ = -11.10;
+// --- TASK PROTOTYPES ---
+void taskSensor(void *pv);
+void taskCAN(void *pv);
+void taskLED(void *pv);
 
-// --- TASKS ---
-TaskHandle_t TaskHandle_Sensors;
-TaskHandle_t TaskHandle_LEDs;
-
-// --- HELPERS ---
-void setOnboardColor(uint8_t r, uint8_t g, uint8_t b) {
-  onboardLED.setPixelColor(0, onboardLED.Color(r, g, b)); onboardLED.show();
-}
-void setExternalColor(uint8_t r, uint8_t g, uint8_t b) {
-  externalLED.setPixelColor(0, externalLED.Color(r, g, b)); externalLED.show();
-}
-
-// ================================================================
-// GYRO CALIBRATION ROUTINE (10 SECONDS)
-// ================================================================
-void calibrateGyro() {
-  Serial.println("Calibrating Gyro... KEEP STILL for 10 Seconds!");
-  setExternalColor(255, 100, 0); // Orange Warning
-  
-  float xSum = 0, ySum = 0, zSum = 0;
-  
-  // INCREASED SAMPLES: 1000 samples @ ~100Hz = ~10 Seconds
-  int samples = 1000; 
-
-  for (int i = 0; i < samples; i++) {
-    // Wait for the sensor to actually have new data
-    while (!myICM.dataReady()) { delay(1); } 
-    
-    myICM.getAGMT();
-    
-    xSum += myICM.gyrX();
-    ySum += myICM.gyrY();
-    zSum += myICM.gyrZ();
-    
-    // Blink the LED every 100 samples (every 1 second) so you know it's counting
-    if (i % 100 == 0) {
-        setExternalColor(0, 0, 0);    // OFF
-        delay(50); 
-        setExternalColor(255, 100, 0); // ORANGE
-        Serial.print("."); // Print a dot to show progress
-    }
-  }
-  Serial.println(" DONE!");
-
-  // Calculate the average offset
-  gyroBiasX = xSum / samples;
-  gyroBiasY = ySum / samples;
-  gyroBiasZ = zSum / samples;
-
-  Serial.print("New Gyro Bias -> X:"); Serial.print(gyroBiasX);
-  Serial.print(" Y:"); Serial.print(gyroBiasY);
-  Serial.print(" Z:"); Serial.println(gyroBiasZ);
-  
-  // Flash Green 3 times to confirm success
-  for(int i=0; i<3; i++) {
-    setExternalColor(0, 255, 0); delay(200); 
-    setExternalColor(0, 0, 0); delay(200);
-  }
-}
-
-// ================================================================
-// TASK 1: SENSOR FUSION ENGINE (Core 1)
-// ================================================================
-void Task_Sensors(void *pvParameters) {
-  (void) pvParameters;
-  const TickType_t xFrequency = pdMS_TO_TICKS(10); // 100Hz
-  TickType_t xLastWakeTime = xTaskGetTickCount();
-
-  filter.begin(100); 
-
-  for (;;) {
-    vTaskDelayUntil(&xLastWakeTime, xFrequency);
-
-    if (myICM.dataReady()) {
-      myICM.getAGMT(); 
-      
-      // 1. GET ACCEL (g)
-      float ax = myICM.accX() / 1000.0;
-      float ay = myICM.accY() / 1000.0;
-      float az = myICM.accZ() / 1000.0;
-
-      // 2. GET GYRO (deg/s) - SUBTRACT BIAS!
-      float gx = myICM.gyrX() - gyroBiasX;
-      float gy = myICM.gyrY() - gyroBiasY;
-      float gz = myICM.gyrZ() - gyroBiasZ;
-
-      // 3. GET MAG (uT) - SUBTRACT BIAS!
-      float mx = myICM.magX() - magBiasX; 
-      float my = myICM.magY() - magBiasY;
-      float mz = myICM.magZ() - magBiasZ;
-
-      // 4. FUSION
-      filter.update(gx, gy, gz, ax, ay, az, mx, my, mz);
-
-      float pitch = filter.getPitch();
-      float roll  = filter.getRoll();
-      float yaw   = filter.getYaw();
-
-      // 5. READ BARO & SEND
-      if (bmp.performReading()) {
-        float alt = bmp.readAltitude(seaLevelPressure);
-
-        // --- CAN TRANSMISSION ---
-        // Frame 1: ACCEL (ID 0x100)
-        twai_message_t msg1;
-        msg1.identifier = 0x100; msg1.extd = 0; msg1.data_length_code = 6;
-        int16_t c_ax = (int16_t)(ax * 1000); 
-        int16_t c_ay = (int16_t)(ay * 1000);
-        int16_t c_az = (int16_t)(az * 1000);
-        msg1.data[0] = highByte(c_ax); msg1.data[1] = lowByte(c_ax);
-        msg1.data[2] = highByte(c_ay); msg1.data[3] = lowByte(c_ay);
-        msg1.data[4] = highByte(c_az); msg1.data[5] = lowByte(c_az);
-        twai_transmit(&msg1, 0);
-
-        // Frame 2: ORIENTATION (ID 0x101)
-        twai_message_t msg2;
-        msg2.identifier = 0x101; msg2.extd = 0; msg2.data_length_code = 6;
-        int16_t c_p = (int16_t)(pitch * 100);
-        int16_t c_r = (int16_t)(roll * 100);
-        int16_t c_y = (int16_t)(yaw * 100);
-        msg2.data[0] = highByte(c_p); msg2.data[1] = lowByte(c_p);
-        msg2.data[2] = highByte(c_r); msg2.data[3] = lowByte(c_r);
-        msg2.data[4] = highByte(c_y); msg2.data[5] = lowByte(c_y);
-        twai_transmit(&msg2, 0);
-
-        // Frame 3: ALTITUDE (ID 0x102)
-        twai_message_t msg3;
-        msg3.identifier = 0x102; msg3.extd = 0; msg3.data_length_code = 2;
-        int16_t c_alt = (int16_t)(alt * 100);
-        msg3.data[0] = highByte(c_alt); msg3.data[1] = lowByte(c_alt);
-        twai_transmit(&msg3, 0);
-
-        // --- SERIAL DASHBOARD ---
-        Serial.print(ax); Serial.print(","); Serial.print(ay); Serial.print(","); Serial.print(az); Serial.print(",");
-        Serial.print(pitch); Serial.print(","); Serial.print(roll); Serial.print(","); Serial.print(yaw); Serial.print(",");
-        Serial.print(mx); Serial.print(","); Serial.print(my); Serial.print(","); Serial.print(mz); Serial.print(",");
-        Serial.print(bmp.temperature); Serial.print(","); Serial.print(bmp.pressure/100.0); Serial.print(","); Serial.println(alt);
-
-        setOnboardColor(50, 0, 100); delay(1); setOnboardColor(0, 0, 0); 
-      }
-    }
-  }
-}
-
-// ================================================================
-// TASK 2: LED ANIMATION (Core 0)
-// ================================================================
-void Task_LEDs(void *pvParameters) {
-  (void) pvParameters;
-  TickType_t xLastWakeTime = xTaskGetTickCount();
-  const TickType_t xFrequency = pdMS_TO_TICKS(20); 
-
-  for (;;) {
-    vTaskDelayUntil(&xLastWakeTime, xFrequency);
-    // Purple Breathing
-    float val = (exp(sin(millis() / 2000.0 * PI)) - 0.36787944) * 108.0;
-    setExternalColor((int)(val * 0.8), 0, (int)val); 
-  }
-}
-
-// ================================================================
-// SETUP
-// ================================================================
 void setup() {
   Serial.begin(115200);
-  delay(1000);
-
-  // Pins
-  pinMode(PIN_CS_ACCEL, OUTPUT); pinMode(PIN_CS_BARO, OUTPUT);
-  digitalWrite(PIN_CS_ACCEL, HIGH); digitalWrite(PIN_CS_BARO, HIGH);
-
-  // LEDs
-  onboardLED.begin(); onboardLED.setBrightness(100);
-  externalLED.begin(); externalLED.setBrightness(200);
-  setOnboardColor(255, 165, 0); setExternalColor(255, 165, 0);
-
-  Serial.println("\n--- NAV MODULE (STABLE YAW) ---");
-
-  // Sensors
+  pinMode(PIN_CS_ACCEL, OUTPUT); digitalWrite(PIN_CS_ACCEL, HIGH);
+  pinMode(PIN_CS_BARO, OUTPUT); digitalWrite(PIN_CS_BARO, HIGH);
+  
+  // Initialize LEDs
+  extLED.begin(); extLED.setBrightness(40); // slightly dimmer for rainbow
+  obLED.begin();  obLED.setBrightness(50);
+  
   SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, -1);
-  myICM.begin(PIN_CS_ACCEL, SPI); 
-  if (myICM.status != ICM_20948_Stat_Ok) while(1);
+  dataMutex = xSemaphoreCreateMutex();
 
-  ICM_20948_fss_t myFSS; myFSS.a = gpm4; myFSS.g = dps500;
-  myICM.setFullScale((ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), myFSS);
+  // --- 1. Initialize Sensor (DMP) ---
+  myICM.begin(PIN_CS_ACCEL, SPI, 3000000);
+  
+  bool success = true; 
 
-  if (!bmp.begin_SPI(PIN_CS_BARO, &SPI)) while(1);
-  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
-  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-  bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+  if (myICM.initializeDMP() != ICM_20948_Stat_Ok) {
+    Serial.println("DMP Fail"); 
+    obLED.setPixelColor(0, obLED.Color(255, 0, 0)); obLED.show(); // Red on fail
+    while(1);
+  }
 
-  // CAN
-  twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)PIN_CAN_TX, (gpio_num_t)PIN_CAN_RX, TWAI_MODE_NO_ACK);
-  twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
+  success &= (myICM.enableDMPSensor(INV_ICM20948_SENSOR_GAME_ROTATION_VECTOR, true) == ICM_20948_Stat_Ok);
+  success &= (myICM.setDMPODRrate(DMP_ODR_Reg_Quat6, 0) == ICM_20948_Stat_Ok);
+  success &= (myICM.enableFIFO() == ICM_20948_Stat_Ok);
+  success &= (myICM.enableDMP() == ICM_20948_Stat_Ok);
+  myICM.resetDMP();
+  myICM.resetFIFO();
+
+  // --- 2. Initialize Barometer ---
+  if (!bmp.begin_SPI(PIN_CS_BARO, &SPI)) {
+    Serial.println("BMP388 Fail");
+  } else {
+    bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
+    bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+    bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+  }
+
+  // --- 3. Initialize CAN Bus ---
+  twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)PIN_CAN_TX, (gpio_num_t)PIN_CAN_RX, TWAI_MODE_NORMAL);
+  twai_timing_config_t t_config = TWAI_TIMING_CONFIG_1MBITS();
   twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-  twai_driver_install(&g_config, &t_config, &f_config);
-  twai_start();
+  
+  if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK) {
+    twai_start();
+    Serial.println("CAN Active");
+  }
 
-  // --- RUN CALIBRATION ---
-  calibrateGyro(); 
-
-  // Create Tasks
-  xTaskCreatePinnedToCore(Task_Sensors, "Sensors", 4096, NULL, 2, &TaskHandle_Sensors, 1);
-  xTaskCreatePinnedToCore(Task_LEDs, "LEDs", 2048, NULL, 1, &TaskHandle_LEDs, 0);
+  // --- 4. Start Tasks ---
+  if (success) {
+    xTaskCreatePinnedToCore(taskSensor, "IMU", 4096, NULL, 3, NULL, 1);
+    xTaskCreatePinnedToCore(taskCAN,    "CAN", 4096, NULL, 2, NULL, 0);
+    xTaskCreatePinnedToCore(taskLED,    "LED", 2048, NULL, 1, NULL, 0);
+    Serial.println("System Active");
+  }
 }
 
 void loop() { vTaskDelete(NULL); }
+
+// --- TASK 1: SENSOR DATA ---
+void taskSensor(void *pv) {
+  while(1) {
+    icm_20948_DMP_data_t data;
+    myICM.readDMPdataFromFIFO(&data);
+
+    if ((myICM.status == ICM_20948_Stat_Ok) || (myICM.status == ICM_20948_Stat_FIFOMoreDataAvail)) {
+      if ((data.header & DMP_header_bitmap_Quat6) > 0) {
+        
+        double q1 = ((double)data.Quat6.Data.Q1) / 1073741824.0;
+        double q2 = ((double)data.Quat6.Data.Q2) / 1073741824.0;
+        double q3 = ((double)data.Quat6.Data.Q3) / 1073741824.0;
+        double q0 = sqrt(1.0 - ((q1 * q1) + (q2 * q2) + (q3 * q3)));
+
+        if(xSemaphoreTake(dataMutex, portMAX_DELAY)) {
+          robotRoll  = atan2(2.0 * (q0 * q1 + q2 * q3), 1.0 - 2.0 * (q1 * q1 + q2 * q2)) * 180.0 / PI;
+          robotPitch = asin(2.0 * (q0 * q2 - q3 * q1)) * 180.0 / PI;
+          robotYaw   = atan2(2.0 * (q0 * q3 + q1 * q2), 1.0 - 2.0 * (q2 * q2 + q3 * q3)) * 180.0 / PI;
+          
+          float temp = 0, alt = 0, press = 0;
+          if (bmp.performReading()) {
+            temp = bmp.temperature;
+            press = bmp.pressure / 100.0;
+            alt = bmp.readAltitude(1013.25);
+          }
+
+          // CSV Output
+          Serial.print("0.0,0.0,0.0,");
+          Serial.print(robotPitch); Serial.print(",");
+          Serial.print(robotRoll);  Serial.print(",");
+          Serial.print(robotYaw);   Serial.print(",");
+          Serial.print(robotYaw);   Serial.print(",");
+          Serial.print("0.0,0.0,0.0,");
+          Serial.print(temp);       Serial.print(",");
+          Serial.print(press);      Serial.print(",");
+          Serial.println(alt);      
+          
+          xSemaphoreGive(dataMutex);
+        }
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(5)); 
+  }
+}
+
+// --- TASK 2: CAN BUS ---
+void taskCAN(void *pv) {
+  while(1) {
+    twai_message_t message;
+    message.identifier = 0x101; 
+    message.data_length_code = 6; 
+    
+    if(xSemaphoreTake(dataMutex, portMAX_DELAY)) {
+      int16_t y = (int16_t)(robotYaw * 100);
+      int16_t p = (int16_t)(robotPitch * 100);
+      int16_t r = (int16_t)(robotRoll * 100);
+      xSemaphoreGive(dataMutex);
+
+      message.data[0] = (y >> 8) & 0xFF; message.data[1] = y & 0xFF;
+      message.data[2] = (p >> 8) & 0xFF; message.data[3] = p & 0xFF;
+      message.data[4] = (r >> 8) & 0xFF; message.data[5] = r & 0xFF;
+
+      twai_transmit(&message, pdMS_TO_TICKS(10));
+    }
+    vTaskDelay(pdMS_TO_TICKS(20));
+  }
+}
+
+// --- TASK 3: HYBRID LED CONTROL (Rainbow + Blink) ---
+void taskLED(void *pv) {
+  uint16_t rainbowHue = 0;
+  uint16_t blinkTimer = 0;
+  bool blinkState = false;
+  
+  // Define Colors
+  uint32_t purple = obLED.Color(60, 0, 150);
+  uint32_t off = obLED.Color(0, 0, 0);
+
+  while(1) {
+    // 1. RAINBOW EFFECT (Pin 1) - Updates every loop (fast)
+    // The hue goes from 0 to 65535 to circle the color wheel
+    extLED.setPixelColor(0, extLED.ColorHSV(rainbowHue));
+    extLED.show();
+    
+    // Increment hue for next loop (speed determined by increment size)
+    rainbowHue += 250; 
+
+    // 2. PURPLE BLINK (Pin 48) - Updates every ~500ms
+    blinkTimer++;
+    if (blinkTimer >= 15) { // Adjust this for speed
+      blinkState = !blinkState;
+      if (blinkState) {
+        obLED.setPixelColor(0, purple);
+      } else {
+        obLED.setPixelColor(0, off);
+      }
+      obLED.show();
+      blinkTimer = 0; // Reset timer
+    }
+
+    // Loop runs at ~50Hz (20ms)
+    vTaskDelay(pdMS_TO_TICKS(20));
+  }
+}

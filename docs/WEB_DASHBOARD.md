@@ -1,10 +1,8 @@
-# 🖥️ Web Dashboard (NAV Mission Control)
+# 🖥️ Web Dashboard (NAV PANEL v5.1)
 
 [🔙 **Back to Main README**](../README.md)
 
-The **NAV Mission Control** dashboard is a browser-based ground control station for real-time telemetry monitoring, 3D orientation visualization, and flight data recording.
-
-![Dashboard Preview](dashboard_preview.png)
+The **NAV PANEL** is a browser-based ground control station for real-time telemetry monitoring and 3D orientation visualization, featuring a **Cyberpunk Neon Purple & Cyan** theme designed for high contrast in competition environments.
 
 ---
 
@@ -12,73 +10,63 @@ The **NAV Mission Control** dashboard is a browser-based ground control station 
 
 1.  **Open** `firmware/index.html` in **Google Chrome** or **Microsoft Edge**.
 2.  **Connect** the ESP32-S3 module to your computer via USB.
-3.  Click the **🔌 CONNECT** button (top-right corner).
-4.  Select **COM port** (e.g., `COM3`) from the browser dialog.
-5.  The status bar will change to **"SYSTEM ONLINE • READY"**.
+3.  Click the **CONNECT** button (top-right corner).
+4.  Select the **COM port** (e.g., `COM3`) from the browser dialog.
+5.  Status indicator changes from `● OFFLINE` to `● ONLINE` (cyan).
 
 > [!IMPORTANT]
 > **Browser Compatibility**: This dashboard uses the **Web Serial API**, which is only available in Chromium-based browsers (Chrome, Edge, Opera). It does **not** work in Firefox or Safari.
 
 ---
 
-## 📊 Dashboard Panels
+## 📊 Dashboard Layout
 
-| Panel | Color | Data Displayed | Unit |
-| :--- | :--- | :--- | :--- |
-| **Accelerometer** | 🔴 Red | AX (Surge), AY (Sway), AZ (Heave) | m/s² |
-| **Gyroscope** | 🔵 Blue | GX (Roll), GY (Pitch), GZ (Yaw) | deg/s |
-| **Magnetometer** | 🟡 Yellow | MX (North), MY (East), MZ (Down) | µT |
-| **Altimeter** | 🟢 Green | Altitude, Pressure | m / hPa |
-| **3D Orientation** | 🟢 Green | Pitch, Roll, Yaw/Heading | degrees |
+The dashboard uses a responsive CSS Grid that fills 100% of the viewport without scrolling.
 
-Each panel includes:
-*   **Real-time numeric readouts** at the top.
-*   **Live scrolling chart** (100-sample window) at the bottom.
-*   **Core Temperature** is displayed in the header bar.
+### Panel Overview
+
+| Panel | Position | Data Displayed |
+| :--- | :--- | :--- |
+| **Primary Navigation** | Left column | Heading (°), Relative Heading (°), Pitch, Roll |
+| **Spatial Awareness** | Center | Real-time 3D Cube (mirrors physical Yaw/Pitch/Roll) |
+| **Environment** | Right column | Altitude (m), Temperature (°C), Pressure (hPa) |
+| **System Health** | Right column (bottom) | CPU Load status, CAN Bus status (1 MBPS) |
+| **Stability Graphs** | Bottom row (3 panels) | Yaw, Pitch, and Roll line charts (40-sample window) |
 
 ---
 
 ## 🧊 3D Orientation View
 
-A **CSS 3D cube** at the bottom of the dashboard rotates in real-time to visualize the module's orientation.
+A **CSS 3D cube** rotates in real-time to mirror the robot's physical orientation.
 
-*   **Pitch** and **Roll** are computed from accelerometer data.
-*   **Yaw / Heading** is computed from magnetometer data.
-*   The cube faces are labeled (FRONT, BACK, LEFT, RIGHT, TOP, BOT) for easy reference.
-
----
-
-## 🎮 Simulation Mode
-
-The dashboard includes a **Simulation Mode** for testing the UI without hardware connected.
-
-### How to Use
-1.  Open `index.html` in a browser (no hardware needed).
-2.  Click the **🎮 SIMULATE** button.
-3.  Status will change to **"SIMULATION MODE"** and charts will animate with fake sine-wave data.
-4.  The 3D cube will rotate, charts will scroll, and the Flight Recorder works normally.
-5.  Click **⏹ STOP SIM** to end simulation.
-
-> [!TIP]
-> Simulation Mode is great for **demos and presentations** where you don't have the hardware available.
+*   **Yaw** → `rotateY`
+*   **Pitch** → `rotateX` (inverted)
+*   **Roll** → `rotateZ` (inverted)
+*   Faces are labeled: **FRONT** (cyan highlight), BACK, LEFT, RIGHT, TOP, BOTTOM.
 
 ---
 
-## 🔴 Flight Recorder
+## 🎯 Tare Zero Point
 
-The dashboard includes a built-in **Black Box** feature for data logging.
+The **TARE ZERO POINT** button captures the current Yaw heading and subtracts it from all future readings, allowing the driver to:
+*   Instantly reset the front-facing heading to **0°**
+*   Monitor relative heading changes from any arbitrary starting position
 
-### How to Use
-1.  Connect to the module (status must be **ONLINE** or **SIMULATION MODE**).
-2.  Click the **🔴 REC** button to start recording.
-3.  The button will pulse red while recording.
-4.  Click **⬛ STOP** to end the recording.
-5.  A **CSV file** will automatically download (e.g., `flight_log_2026-02-10T...csv`).
+The **RELATIVE** readout in the Primary Navigation panel shows the tared value.
 
-### CSV Format
-```text
-Timestamp, Ax, Ay, Az, Gx, Gy, Gz, Mx, My, Mz, Temp, Press, Alt
-```
+---
+
+## 📈 Stability Graphs
+
+Three separate **Chart.js** line graphs display:
+
+| Graph | Color | Data Source |
+| :--- | :--- | :--- |
+| **Yaw Stability** | 🔵 Cyan | Tared heading (yaw − tare offset) |
+| **Pitch** | 🟣 Purple | Pitch angle from DMP |
+| **Roll** | 🔴 Pink | Roll angle from DMP |
+
+Each graph shows a **40-sample rolling window** with no animation for maximum performance.
 
 ---
 
@@ -87,14 +75,15 @@ Timestamp, Ax, Ay, Az, Gx, Gy, Gz, Mx, My, Mz, Temp, Press, Alt
 | Parameter | Value |
 | :--- | :--- |
 | **Baud Rate** | `115200` |
-| **Data Format** | CSV (12 comma-separated values per line) |
+| **Data Format** | CSV (13 comma-separated values per line) |
 | **Encoding** | UTF-8 |
 
 ### Expected Input Format
-The firmware must output data in this exact CSV order:
+The firmware outputs data in this CSV order:
 ```text
-Ax,Ay,Az,Gx,Gy,Gz,Mx,My,Mz,Temp,Press,Alt
+0,0,0,Pitch,Roll,Yaw,Yaw,0,0,0,Temp,Pressure,Altitude
 ```
+Fields at indices 0-2 and 7-9 are reserved (sent as `0.0`).
 
 > [!TIP]
 > **Offline Ready**: The `Chart.js` library is bundled locally in the `firmware/` folder. This dashboard works **100% offline** — no internet connection required at competition venues.
