@@ -24,15 +24,71 @@
         }
 
         [data-theme="light"] {
-            --bg-dark: #f0f0f5;
+            --primary-purple: #8a00c2;
+            --accent-cyan: #007a8c;
+            --alert-pink: #cc0044;
+            --bg-dark: #e8e8f0;
             --panel-bg: rgba(255, 255, 255, 0.95);
-            --text-dim: #666;
+            --text-dim: #444;
             --text-main: #111;
-            --grid-line: rgba(0, 0, 0, 0.05);
-            --header-bg: rgba(255, 255, 255, 0.98);
-            --graph-bg: rgba(0, 0, 0, 0.05);
-            --graph-grid: rgba(0, 0, 0, 0.08);
-            --graph-tick: #999;
+            --grid-line: rgba(0, 0, 0, 0.08);
+            --header-bg: rgba(245, 245, 250, 0.98);
+            --graph-bg: rgba(0, 0, 0, 0.04);
+            --graph-grid: rgba(0, 0, 0, 0.12);
+            --graph-tick: #555;
+        }
+
+        [data-theme="light"] .panel {
+            border-color: rgba(138, 0, 194, 0.3);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        [data-theme="light"] .face {
+            background: rgba(138, 0, 194, 0.15);
+            border-color: #8a00c2;
+            box-shadow: 0 0 8px rgba(138, 0, 194, 0.3);
+            color: #8a00c2;
+        }
+
+        [data-theme="light"] .front {
+            border-color: #007a8c;
+            color: #007a8c;
+            box-shadow: 0 0 8px rgba(0, 122, 140, 0.4);
+        }
+
+        [data-theme="light"] .value {
+            color: #005f6b;
+            text-shadow: none;
+        }
+
+        [data-theme="light"] header {
+            border-bottom-color: #8a00c2;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="light"] .status-bar {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(138, 0, 194, 0.2);
+        }
+
+        [data-theme="light"] .compass-ring {
+            stroke: #8a00c2;
+        }
+
+        [data-theme="light"] .compass-tick {
+            stroke: #555;
+        }
+
+        [data-theme="light"] .compass-tick-major {
+            stroke: #007a8c;
+        }
+
+        [data-theme="light"] .compass-label {
+            fill: #333;
+        }
+
+        [data-theme="light"] #sim-container {
+            background: radial-gradient(circle, rgba(138, 0, 194, 0.06) 0%, transparent 70%);
         }
 
         * {
