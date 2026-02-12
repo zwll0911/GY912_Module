@@ -8,7 +8,7 @@ This document explains the complete software architecture, sensor fusion mathema
 
 ## ⚡ FreeRTOS Task Architecture
 
-The ESP32-S3 dual-core processor runs three dedicated FreeRTOS tasks. The Arduino `loop()` function is deleted immediately (`vTaskDelete(NULL)`) after task creation.
+The ESP32-S3 dual-core processor runs three dedicated FreeRTOS tasks plus the Arduino `loop()` function.
 
 ### Task Configuration
 
@@ -16,7 +16,8 @@ The ESP32-S3 dual-core processor runs three dedicated FreeRTOS tasks. The Arduin
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **taskSensor** | `taskSensor()` | 3 (Highest) | Core 1 | 4096 bytes | ~200Hz | `vTaskDelay(pdMS_TO_TICKS(5))` |
 | **taskCAN** | `taskCAN()` | 2 (Mid) | Core 0 | 4096 bytes | 50Hz | `vTaskDelay(pdMS_TO_TICKS(20))` |
-| **taskLED** | `taskLED()` | 1 (Lowest) | Core 0 | 2048 bytes | 50Hz | `vTaskDelay(pdMS_TO_TICKS(20))` |
+| **taskLED** | `taskLED()` | 1 (Lowest) | Core 0 | 2048 bytes | 10Hz | `vTaskDelay(pdMS_TO_TICKS(100))` |
+| **loop()** | `loop()` | 1 (Lowest) | Core 1 | Default | Idle | `vTaskDelay(50)` / `(100)` |
 
 ### Task Creation Code
 ```cpp
@@ -28,6 +29,35 @@ xTaskCreatePinnedToCore(taskLED,    "LED", 2048, NULL, 1, NULL, 0);  // Core 0
 > [!TIP]
 > **Why is `taskSensor` pinned to Core 1?**
 > The ESP32-S3 TWAI (CAN) driver generates interrupts on Core 0 by default. Pinning the time-critical DMP FIFO reads to Core 1 prevents CAN bus interrupts from causing timing jitter in the sensor fusion loop.
+
+## 🌈 LED Behaviour (taskLED)
+
+### Pin 1 — External Status
+- **Solid Green**: Normal Operation (Sensor Fusion Active)
+- **Breathing Blue**: WiFi / OTA Active (UDP Streaming)
+
+```cpp
+if (otaInitialized) {
+    // Breathing Blue logic
+    breathVal += breathDir;
+    if (breathVal >= 200 || breathVal <= 10) breathDir = -breathDir;
+    extLED.setPixelColor(0, extLED.Color(0, 0, (uint8_t)breathVal));
+} else {
+    // Solid Green
+    extLED.setPixelColor(0, extLED.Color(0, 80, 0));
+}
+```
+
+### Pin 48 — Onboard Purple Heartbeat
+```cpp
+uint32_t purple = obLED.Color(60, 0, 150);
+blinkTimer++;
+if (blinkTimer >= 15) {  // Toggle every 15 × 100ms = 1.5s
+    blinkState = !blinkState;
+    obLED.setPixelColor(0, blinkState ? purple : off);
+    blinkTimer = 0;
+}
+```
 
 ### Thread Safety — Mutex
 

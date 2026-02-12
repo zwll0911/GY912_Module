@@ -1,11 +1,11 @@
-# 🚁 Industrial AHRS Navigation Module (V5.4)
+# 🚁 Industrial AHRS Navigation Module (V5.5)
 
 ![ESP32-S3](https://img.shields.io/badge/Hardware-ESP32--S3-red?style=for-the-badge&logo=espressif)
 ![Sensor Fusion](https://img.shields.io/badge/Fusion-DMP_225Hz-blue?style=for-the-badge)
 ![Connectivity](https://img.shields.io/badge/Connect-USB_%7C_UDP-purple?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-> **High-Precision Navigation Core for Competition Robotics (Robocon)**
+> **High-Precision Navigation Core for Competition Robotics**
 
 The **Industrial AHRS Navigation Module** is a robust sensor fusion engine built on the **ESP32-S3**. It delivers stable 6-axis orientation (Yaw, Pitch, Roll) via **1 Mbps CAN Bus** and offers **Dual-Mode Telemetry** (USB Serial + Wireless UDP) for real-time monitoring.
 
@@ -17,8 +17,9 @@ The **Industrial AHRS Navigation Module** is a robust sensor fusion engine built
 
 - [Key Features](#-key-features)
 - [System Architecture Overview](#-system-architecture-overview)
-- [Sensor Fusion Pipeline](#-sensor-fusion-pipeline)
+- [Sensor Fusion Pipeline (ICM-20948 DMP)](#-sensor-fusion-pipeline-icm-20948-dmp)
 - [System Status Indicators](#-system-status-indicators)
+- [FreeRTOS Task Architecture](#freertos-task-architecture)
 - [Hardware Specifications](#️-hardware-specifications)
 - [Quick Start](#-quick-start)
 - [Documentation](#-documentation)
@@ -36,7 +37,7 @@ The **Industrial AHRS Navigation Module** is a robust sensor fusion engine built
 | **Power Optimized** | Efficient UDP broadcast, WiFi power save enabled, and smart task scheduling |
 | **High-Speed CAN** | ESP32-S3 TWAI driver at **1 Mbps** for Robomaster C620/C610 speed controllers |
 | **Environment Sensing** | BMP388 via SPI — Altitude (m), Pressure (hPa), Temperature (°C) at 50Hz ODR |
-| **Cyberpunk UI** | NAV PANEL v5.3 — Smoothed 3D cube, 30Hz live graphs, tare heading, health stats |
+| **Cyberpunk UI** | NAV PANEL v5.4 — Smoothed 3D cube, 30Hz live graphs, tare heading, health stats |
 
 ---
 
@@ -64,6 +65,7 @@ flowchart LR
         direction TB
         CAN_Task["taskCAN (P2, 50Hz)"]
         LED_Task["taskLED (P1, 10Hz)"]
+        Pool_Task["loop() (P1, Idle)"]
     end
 
     Mutex{{"🔒 Mutex"}}
@@ -80,42 +82,15 @@ flowchart LR
 
 ---
 
-## 🔬 Sensor Fusion Pipeline
+## 🌀 Sensor Fusion Pipeline (ICM-20948 DMP)
 
-### 1. DMP Quaternion Output
-The ICM-20948 DMP outputs raw fixed-point quaternion components (Q1, Q2, Q3). These are normalized from 30-bit signed integers:
+The module offloads complex sensor fusion math to the ICM-20948's **Digital Motion Processor (DMP)**. This frees up the ESP32-S3 for CAN communication and logic.
 
-```
-q1 = raw_Q1 / 1,073,741,824.0    (2^30)
-q2 = raw_Q2 / 1,073,741,824.0
-q3 = raw_Q3 / 1,073,741,824.0
-q0 = √(1 - q1² - q2² - q3²)      (unit quaternion constraint)
-```
-
-### 2. Quaternion → Euler Conversion
-Standard aerospace convention (ZYX rotation order):
-
-```
-Roll  (φ) = atan2(2(q0·q1 + q2·q3), 1 − 2(q1² + q2²)) × 180/π
-Pitch (θ) = asin(2(q0·q2 − q3·q1)) × 180/π
-Yaw   (ψ) = atan2(2(q0·q3 + q1·q2), 1 − 2(q2² + q3²)) × 180/π
-```
-
-### 3. Barometric Calculations
-```
-Pressure (hPa) = raw_pressure / 100.0         (BMP388 outputs Pa)
-Altitude (m)   = readAltitude(1013.25 hPa)     (ISA sea-level reference)
-Temperature    = direct reading (°C)
-```
-
-### 4. CAN Packing (Big-Endian)
-```
-int16_t yaw_raw   = (int16_t)(yaw_deg × 100)    → data[0..1]
-int16_t pitch_raw  = (int16_t)(pitch_deg × 100)  → data[2..3]
-int16_t roll_raw   = (int16_t)(roll_deg × 100)   → data[4..5]
-
-Each: data[n] = (val >> 8) & 0xFF,  data[n+1] = val & 0xFF
-```
+1.  **Raw Data**: Accel + Gyro sampled internally at 1125Hz.
+2.  **DMP Fusion**: 6-axis Game Rotation Vector algorithm runs on DMP.
+3.  **FIFO Read**: ESP32 `taskSensor` reads Quaternion (q0, q1, q2, q3) at 225Hz.
+4.  **Euler Conversion**: Quaternion converted to Yaw (-180 to +180), Pitch, Roll.
+5.  **Output**: Data written to shared mutex variables and Serial/UDP stream.
 
 ---
 
@@ -125,46 +100,49 @@ The module uses dual WS2812B RGB LEDs to communicate system state.
 
 | LED | Pin | Pattern | Meaning | Technical Detail |
 | :--- | :--- | :--- | :--- | :--- |
-| 🌈 **External** | **1** | Rainbow Cycle | System Idle / Ready | HSV hue 0→65535, increment +250/loop, brightness 40 |
-| 🟣 **Onboard** | **48** | Purple Blink (0.5Hz) | CPU Heartbeat | Color `RGB(60,0,150)`, toggle every 15 loops, brightness 50 |
-| 🔴 **Onboard** | **48** | Solid Red | DMP Init Failure | `RGB(255,0,0)`, system halts in `while(1)` |
+| **Device Status** | **1** | **Solid Green** | Normal Operation | System running, sensor fusion active |
+| **Device Status** | **1** | **Breathing Blue** | WiFi / OTA Active | UDP streaming or OTA update pending |
+| **Heartbeat** | **48** | **Purple Blink** (0.5Hz) | CPU Alive | Toggles every 1.5s (10Hz loop) |
+| **Error** | **48** | **Solid Red** | DMP Init Failure | Sensor initialization failed. Check wiring. |
+
+### FreeRTOS Task Architecture
+
+The ESP32-S3 dual-core processor runs three dedicated FreeRTOS tasks plus the Arduino `loop()`:
+
+1.  **`taskSensor` (Core 1, P3, 200Hz)**: Reads DMP FIFO, reads BMP388, updates orientation.
+2.  **`taskCAN` (Core 0, P2, 50Hz)**: Handles CAN transmission and reception.
+3.  **`taskLED` (Core 0, P1, 10Hz)**: Updates status LEDs.
+4.  **`loop()` (Core 1, P1)**: Handles OTA updates and low-power sleep when idle.
 
 ---
 
 ## 🛠️ Hardware Specifications
 
-| Component | Model | Function | Bus | Config |
-| :--- | :--- | :--- | :--- | :--- |
-| **MCU** | ESP32-S3 SuperMini | Dual-Core Xtensa LX7 @ 240MHz | — | FreeRTOS, 2 cores |
-| **IMU** | ICM-20948 | 6-DOF Accel/Gyro + DMP | SPI @ 3 MHz | CS: Pin 10 |
-| **Barometer** | BMP388 | Altitude / Pressure / Temp | SPI | CS: Pin 9, 50Hz ODR |
-| **CAN Transceiver** | SN65HVD230 | CAN Bus 3.3V Interface | TWAI | TX: Pin 5, RX: Pin 6 |
-| **LED (External)** | WS2812B | Status Rainbow | NeoPixel | Pin 1 |
-| **LED (Onboard)** | WS2812B | CPU Heartbeat | NeoPixel | Pin 48 |
-
-### BMP388 Oversampling Configuration
-| Parameter | Setting |
+| Component | Specification |
 | :--- | :--- |
-| Temperature Oversampling | 8× |
-| Pressure Oversampling | 4× |
-| IIR Filter Coefficient | 3 |
-| Output Data Rate | 50 Hz |
+| **MCU** | ESP32-S3FH4R2 (Dual Core 240MHz, 4MB Flash, 2MB PSRAM) |
+| **IMU** | TDK InvenSense ICM-20948 (9-Axis MEMS) |
+| **Barometer** | Bosch BMP388 (Precision Altimeter) |
+| **CAN Transceiver** | SN65HVD230 (3.3V Logic) |
+| **Power Input** | 5V via USB-C or VIN Pin |
+| **Logic Level** | 3.3V |
 
 ---
 
 ## ⚡ Quick Start
 
-### 1. Clone & Setup
-```bash
-git clone https://github.com/zwll0911/GY912_Module.git
-cd GY912_Module
-```
+### 1. Hardware Setup (PCB v1.1)
+Ensure the module is powered via 5V. The LEDs should light up:
+- **Pin 1**: Solid Green (Normal) or Breathing Blue (WiFi).
+- **Pin 48**: Blinking Purple (Heartbeat).
 
-### 2. Wiring
-Connect sensors as per the [Hardware Guide](docs/HARDWARE.md). **Ensure 3.3V logic compatibility!**
+### 2. Flash Firmware
+Use **PlatformIO** (recommended) or Arduino IDE.
+- **PlatformIO**: Open project folder → Click `Upload`.
+- **Arduino**: Open `firmware/esp32s3/esp32s3.ino` → Select "ESP32S3 Dev Module" → Upload.
 
-### 3. Build & Flash
-Use **PlatformIO** in VSCode to compile and upload the firmware to the ESP32-S3.
+### 3. Calibration
+Place the module on a flat, stationary surface for 3 seconds after power-up. The DMP auto-calibrates gyro bias.
 
 ### 4. Connect CAN
 Hook up `CAN H` and `CAN L` to your Robomaster bus network (**1 Mbps**).

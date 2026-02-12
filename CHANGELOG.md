@@ -4,6 +4,15 @@ All notable changes to the **Industrial AHRS Navigation Module** will be documen
 
 ---
 
+## [5.5] — 2026-02-12
+
+### 📚 Documentation & Branding
+- **Updated LED Status**: Corrected documentation to reflect Solid Green (Normal) and Breathing Blue (WiFi) patterns.
+- **Task Architecture**: Clarified that `loop()` is active (not deleted) and handles OTA/Sleep.
+- **System Health**: Updated dashboard documentation to match dynamic fields (Heap, CAN Status, Drift).
+- **Branding**: Removed "Robocon" references for a more general-purpose industrial focus.
+- **Assets**: Updated `dashboard_preview.png` with latest UI.
+
 ## [5.4] — 2026-02-12
 
 ### 🚀 UDP Streaming & Power Optimization

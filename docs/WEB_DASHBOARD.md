@@ -1,4 +1,4 @@
-# 🖥️ Web Dashboard — NAV PANEL v5.4
+# 🖥️ Web Dashboard — NAV PANEL v5.5
 
 [🔙 **Back to Main README**](../README.md)
 
@@ -117,10 +117,11 @@ cube.style.transform = `rotateX(${-p}deg) rotateY(${y}deg) rotateZ(${-r}deg)`;
 
 ### Panel 3 (cont.) — System Health
 
-| Indicator | Static Value | Color |
+| Indicator | Data Source | Details |
 | :--- | :--- | :--- |
-| **CPU LOAD** | `NOMINAL` | Cyan (`--accent-cyan`) |
-| **CAN BUS** | `ACTIVE (1 MBPS)` | Purple (`--primary-purple`) |
+| **FREE HEAP** | CSV field [13] | ESP32 free memory in KB (e.g., `210 KB`) |
+| **CAN BUS** | CSV field [14] | Status: `OK (1 MBPS)` or `ERR:<count>` |
+| **YAW DRIFT** | CSV field [15] | Gyro drift rate in °/s (Color-coded: Cyan < 0.05) |
 
 ### Panel 4 — Stability Graphs (Bottom Row, spans 3 columns)
 
