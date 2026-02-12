@@ -8,8 +8,8 @@
 #include <ICM_20948.h>
 #include <Preferences.h>
 #include <SPI.h>
-#include <WiFi.h> // #3: OTA
-
+#include <WiFi.h>    // #3: OTA
+#include <WiFiUdp.h> // UDP low-latency streaming
 
 // --- PINS ---
 #define PIN_SPI_SCK 12
@@ -72,6 +72,12 @@ bool altBufFull = false;
 bool otaEnabled = false;
 bool otaInitialized = false;
 
+// UDP streaming
+unsigned long lastUdpSendMs = 0;
+WiFiUDP udp;
+const uint16_t UDP_PORT = 4210;
+const IPAddress UDP_BROADCAST(192, 168, 4, 255);
+
 // --- TASK PROTOTYPES ---
 void taskSensor(void *pv);
 void taskCAN(void *pv);
@@ -93,7 +99,7 @@ float addAltSample(float sample) {
   return sum / count;
 }
 
-// --- HELPER: #3 OTA Setup ---
+// --- HELPER: #3 OTA + UDP Setup ---
 void setupOTA() {
   if (otaInitialized)
     return;
@@ -109,6 +115,11 @@ void setupOTA() {
   ArduinoOTA.onError(
       [](ota_error_t error) { Serial.printf("OTA Error [%u]\n", error); });
   ArduinoOTA.begin();
+
+  // Start UDP for low-latency sensor streaming
+  udp.begin(UDP_PORT);
+  Serial.printf("UDP: Broadcasting on port %d\n", UDP_PORT);
+
   otaInitialized = true;
   Serial.println("OTA: Ready (connect to NAV_MODULE_OTA)");
 }
@@ -116,6 +127,7 @@ void setupOTA() {
 void stopOTA() {
   if (!otaInitialized)
     return;
+  udp.stop();
   WiFi.softAPdisconnect(true);
   WiFi.mode(WIFI_OFF);
   otaInitialized = false;
@@ -219,8 +231,7 @@ void setup() {
 }
 
 void loop() {
-  // #3: Handle OTA in main loop (runs on Core 0 before deletion)
-  // Also handle serial commands for OTA toggle
+  // Handle serial commands for OTA toggle
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
@@ -240,10 +251,9 @@ void loop() {
   }
   if (otaInitialized) {
     ArduinoOTA.handle();
-    vTaskDelay(pdMS_TO_TICKS(10));
+    vTaskDelay(pdMS_TO_TICKS(50));
   } else {
-    // If OTA not active, delete this task to save resources
-    vTaskDelete(NULL);
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
 
@@ -311,28 +321,35 @@ void taskSensor(void *pv) {
           xSemaphoreGive(dataMutex);
         }
 
-        // CSV: 16 fields (added yawDriftRate at [15])
-        Serial.print("0.0,0.0,0.0,");
-        Serial.print(localPitch);
-        Serial.print(",");
-        Serial.print(localRoll);
-        Serial.print(",");
-        Serial.print(localYaw);
-        Serial.print(",");
-        Serial.print(localYaw);
-        Serial.print(",");
-        Serial.print("0.0,0.0,0.0,");
-        Serial.print(temp);
-        Serial.print(",");
-        Serial.print(press);
-        Serial.print(",");
-        Serial.print(smoothAlt);
-        Serial.print(","); // #5: smoothed
-        Serial.print(esp_get_free_heap_size());
-        Serial.print(",");
-        Serial.print(canTxErrors);
-        Serial.print(",");
-        Serial.println(yawDriftRate, 4); // #1: drift in °/s
+        // Send to active channel (throttled to 50Hz)
+        if (otaInitialized) {
+          unsigned long now_udp = millis();
+          if (now_udp - lastUdpSendMs >= 20) {
+            // Build CSV only when sending
+            char csvLine[200];
+            snprintf(
+                csvLine, sizeof(csvLine),
+                "0.0,0.0,0.0,%.2f,%.2f,%.2f,%.2f,0.0,0.0,0.0,%.1f,%.1f,%.1f,%"
+                "lu,%lu,%.4f",
+                localPitch, localRoll, localYaw, localYaw, temp, press,
+                smoothAlt, (unsigned long)esp_get_free_heap_size(),
+                (unsigned long)canTxErrors, yawDriftRate);
+            udp.beginPacket(UDP_BROADCAST, UDP_PORT);
+            udp.print(csvLine);
+            udp.endPacket();
+            lastUdpSendMs = now_udp;
+          }
+        } else if (Serial) {
+          char csvLine[200];
+          snprintf(
+              csvLine, sizeof(csvLine),
+              "0.0,0.0,0.0,%.2f,%.2f,%.2f,%.2f,0.0,0.0,0.0,%.1f,%.1f,%.1f,%"
+              "lu,%lu,%.4f",
+              localPitch, localRoll, localYaw, localYaw, temp, press, smoothAlt,
+              (unsigned long)esp_get_free_heap_size(),
+              (unsigned long)canTxErrors, yawDriftRate);
+          Serial.println(csvLine);
+        }
       }
     }
     vTaskDelay(pdMS_TO_TICKS(5));
@@ -421,20 +438,37 @@ void taskCAN(void *pv) {
   }
 }
 
-// --- TASK 3: HYBRID LED CONTROL ---
+// --- TASK 3: STATUS LED CONTROL ---
 void taskLED(void *pv) {
-  uint16_t rainbowHue = 0;
   uint16_t blinkTimer = 0;
   bool blinkState = false;
+  int16_t breathVal = 10; // Use signed to avoid underflow
+  int16_t breathDir = 5;
 
   uint32_t purple = obLED.Color(60, 0, 150);
   uint32_t off = obLED.Color(0, 0, 0);
 
   while (1) {
-    extLED.setPixelColor(0, extLED.ColorHSV(rainbowHue));
+    // External LED: OTA/WiFi status indicator
+    if (otaInitialized) {
+      // Pulsing blue = WiFi/OTA active
+      breathVal += breathDir;
+      if (breathVal >= 200) {
+        breathVal = 200;
+        breathDir = -5;
+      }
+      if (breathVal <= 10) {
+        breathVal = 10;
+        breathDir = 5;
+      }
+      extLED.setPixelColor(0, extLED.Color(0, 0, (uint8_t)breathVal));
+    } else {
+      // Solid green = normal operation
+      extLED.setPixelColor(0, extLED.Color(0, 80, 0));
+    }
     extLED.show();
-    rainbowHue += 250;
 
+    // Onboard LED: heartbeat blink (purple)
     blinkTimer++;
     if (blinkTimer >= 15) {
       blinkState = !blinkState;
@@ -443,6 +477,6 @@ void taskLED(void *pv) {
       blinkTimer = 0;
     }
 
-    vTaskDelay(pdMS_TO_TICKS(20));
+    vTaskDelay(pdMS_TO_TICKS(100)); // 10Hz is fine for status LEDs
   }
 }

@@ -1,8 +1,12 @@
-# 🖥️ Web Dashboard — NAV PANEL v5.1
+# 🖥️ Web Dashboard — NAV PANEL v5.4
 
 [🔙 **Back to Main README**](../README.md)
 
-The **NAV PANEL** is a browser-based ground control station for real-time telemetry monitoring and 3D orientation visualization. It connects directly to the ESP32-S3 via **Web Serial API** and features a **Cyberpunk Neon Purple & Cyan** theme designed for high visibility in competition environments.
+The **NAV PANEL** is a browser-based ground control station for real-time telemetry monitoring and 3D orientation visualization. It supports **Dual-Mode Connectivity**:
+1.  **USB Serial**: Direct connection via Web Serial API (Chrome/Edge only).
+2.  **Wireless UDP**: Low-latency streaming over WiFi via a local Python relay.
+
+Features a **Cyberpunk Neon Purple & Cyan** theme, now with **smoothed animations** (3D cube, compass) and **30Hz charts**.
 
 ![Dashboard Preview](dashboard_preview.png)
 
@@ -10,14 +14,15 @@ The **NAV PANEL** is a browser-based ground control station for real-time teleme
 
 ## ⚡ Quick Start
 
-1.  Open `firmware/index.html` in **Google Chrome** or **Microsoft Edge**.
-2.  Connect the ESP32-S3 module via USB.
-3.  Click the **CONNECT** button (top-right corner).
-4.  Select the COM port (e.g., `COM3`) from the browser dialog.
-5.  Status changes from `● OFFLINE` (grey) to `● ONLINE` (cyan).
+### Option A: USB Serial (Wired)
+1.  Connect ESP32-S3 via USB.
+2.  Click **🔌 USB**.
+3.  Select COM port.
 
-> [!IMPORTANT]
-> **Browser Compatibility**: This dashboard uses the **Web Serial API**, which is only available in Chromium-based browsers (Chrome, Edge, Opera). It does **not** work in Firefox or Safari.
+### Option B: Wireless UDP (WiFi)
+1.  Connect laptop to `NAV_MODULE_OTA` WiFi.
+2.  Run the relay script: `python firmware/udp_relay.py`.
+3.  Click **📡 WIFI** (connects to `ws://localhost:8765`).
 
 ---
 
@@ -90,7 +95,8 @@ cube.style.transform = `rotateX(${-p}deg) rotateY(${y}deg) rotateZ(${-r}deg)`;
 #cube {
     width: 180px; height: 180px;
     transform-style: preserve-3d;
-    transition: transform 0.05s linear;  /* 50ms smoothing */
+    transition: transform 80ms ease-out;  /* Smooths rotation between 50Hz updates */
+    will-change: transform;               /* GPU acceleration hint */
 }
 .face { backface-visibility: visible; }
 .front { transform: translateZ(90px); }     /* Cyan highlight */
@@ -155,31 +161,28 @@ function updateGraph(chart, val) {
 
 ---
 
-## 🔌 Web Serial Connection
+## 🔌 Dual-Mode Connection (USB / UDP)
 
 ### Connection Flow
+
 ```mermaid
 sequenceDiagram
     participant User
     participant Browser
+    participant Relay as Python Relay
     participant ESP32 as ESP32-S3
 
-    User->>Browser: Click CONNECT
-    Browser->>Browser: navigator.serial.requestPort()
-    Browser->>User: COM port selection dialog
-    User->>Browser: Select COM port
-    Browser->>ESP32: port.open({ baudRate: 115200 })
-    Browser->>Browser: Status → "● ONLINE" (cyan)
-    Browser->>Browser: Hide CONNECT button
-    Browser->>Browser: Create TextDecoderStream
-    Browser->>ESP32: Start readLoop()
-
-    loop Every ~5ms
-        ESP32->>Browser: CSV line (13 fields)
-        Browser->>Browser: Buffer until newline
-        Browser->>Browser: split(',').map(Number)
-        Browser->>Browser: Update DOM + Charts + 3D Cube
+    alt USB Mode (Wired)
+        Browser->>ESP32: Web Serial API (115200 baud)
+        ESP32->>Browser: Serial CSV Stream
+    else UDP Mode (Wireless)
+        ESP32->>Relay: UDP Broadcast (Port 4210)
+        Relay->>Browser: WebSocket (ws://localhost:8765)
+        Note over Relay: Zero-latency local forwarding
     end
+
+    Browser->>Browser: Update DOM + 3D Cube (Smooth Transition)
+    Browser->>Browser: Plot Charts (30Hz)
 ```
 
 ### Serial Data Parsing

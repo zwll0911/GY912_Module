@@ -1,13 +1,13 @@
-# 🚁 Industrial AHRS Navigation Module (V5.3)
+# 🚁 Industrial AHRS Navigation Module (V5.4)
 
 ![ESP32-S3](https://img.shields.io/badge/Hardware-ESP32--S3-red?style=for-the-badge&logo=espressif)
 ![Sensor Fusion](https://img.shields.io/badge/Fusion-DMP_225Hz-blue?style=for-the-badge)
-![CAN Bus](https://img.shields.io/badge/CAN-TWAI_1Mbps-orange?style=for-the-badge)
+![Connectivity](https://img.shields.io/badge/Connect-USB_%7C_UDP-purple?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 > **High-Precision Navigation Core for Competition Robotics (Robocon)**
 
-The **Industrial AHRS Navigation Module** is a robust sensor fusion engine built on the **ESP32-S3** dual-core MCU. It offloads 6-axis sensor fusion to the **ICM-20948 Digital Motion Processor** (GAME_ROTATION_VECTOR) and integrates a **BMP388** precision barometer to deliver stable, drift-free orientation (Yaw, Pitch, Roll) and environment telemetry via **1 Mbps CAN Bus** (TWAI).
+The **Industrial AHRS Navigation Module** is a robust sensor fusion engine built on the **ESP32-S3**. It delivers stable 6-axis orientation (Yaw, Pitch, Roll) via **1 Mbps CAN Bus** and offers **Dual-Mode Telemetry** (USB Serial + Wireless UDP) for real-time monitoring.
 
 ![Dashboard Preview](docs/dashboard_preview.png)
 
@@ -30,14 +30,13 @@ The **Industrial AHRS Navigation Module** is a robust sensor fusion engine built
 
 | Feature | Detail |
 | :--- | :--- |
-| **DMP Sensor Fusion** | 6-axis fusion offloaded to ICM-20948 DMP using `GAME_ROTATION_VECTOR` at **225Hz** (ODR divisor = 0) |
-| **3-Task FreeRTOS** | `taskSensor` (P3, Core 1, 200Hz), `taskCAN` (P2, Core 0, 50Hz), `taskLED` (P1, Core 0, 50Hz) |
-| **Thread-Safe Data** | `xSemaphoreCreateMutex()` protects shared Yaw/Pitch/Roll floats between sensor and CAN tasks |
+| **DMP Sensor Fusion** | 6-axis fusion offloaded to ICM-20948 DMP using `GAME_ROTATION_VECTOR` at **225Hz** |
+| **Wireless UDP** | Low-latency (~20ms) data streaming over WiFi (Broadcast to `192.168.4.255:4210`) |
+| **Dual-Mode Dashboard** | Connect via USB (Web Serial) or Wireless (UDP Relay) for real-time visualization |
+| **Power Optimized** | Efficient UDP broadcast, WiFi power save enabled, and smart task scheduling |
 | **High-Speed CAN** | ESP32-S3 TWAI driver at **1 Mbps** for Robomaster C620/C610 speed controllers |
-| **Yaw Stabilization** | Startup calibration eliminates gyro drift → stable 0.0° heading reference |
 | **Environment Sensing** | BMP388 via SPI — Altitude (m), Pressure (hPa), Temperature (°C) at 50Hz ODR |
-| **Dual LED Status** | Pin 1: Rainbow HSV cycle, Pin 48: Neon Purple heartbeat blink (0.5Hz) |
-| **Cyberpunk Dashboard** | NAV PANEL v5.1 — 3D cube, 3 live graphs, tare heading, environment panel |
+| **Cyberpunk UI** | NAV PANEL v5.3 — Smoothed 3D cube, 30Hz live graphs, tare heading, health stats |
 
 ---
 
@@ -49,23 +48,22 @@ flowchart LR
         IMU["ICM-20948<br/>(DMP)"]
         BARO["BMP388"]
         Bus((CAN Bus<br/>1 Mbps))
-        LED1((Pin 1<br/>Rainbow))
-        LED48((Pin 48<br/>Heartbeat))
+        WiFi((WiFi AP<br/>UDP Broadcast))
     end
 
     subgraph Core1 ["Core 1: taskSensor (P3, 200Hz)"]
         direction TB
         FIFO[Read DMP FIFO]
-        Quat["Quaternion (q0,q1,q2,q3)"]
-        Euler["Euler Angles<br/>Yaw / Pitch / Roll"]
+        Quat["Quaternion"]
+        Euler["Euler Angles"]
         BMP[Read BMP388]
-        CSV[Serial CSV Output]
+        CSV[Build CSV]
     end
 
     subgraph Core0 ["Core 0"]
         direction TB
-        CAN_Task["taskCAN (P2, 50Hz)<br/>TWAI Transmit"]
-        LED_Task["taskLED (P1, 50Hz)<br/>Rainbow + Blink"]
+        CAN_Task["taskCAN (P2, 50Hz)"]
+        LED_Task["taskLED (P1, 10Hz)"]
     end
 
     Mutex{{"🔒 Mutex"}}
@@ -76,9 +74,8 @@ flowchart LR
     Euler & BMP --> CSV
     Euler --> Mutex
     Mutex --> CAN_Task
-    CAN_Task -->|"ID:0x101 (6B)"| Bus
-    LED_Task --> LED1
-    LED_Task --> LED48
+    CAN_Task -->|"ID:0x101"| Bus
+    CSV -.->|Wireless| WiFi
 ```
 
 ---
@@ -172,8 +169,9 @@ Use **PlatformIO** in VSCode to compile and upload the firmware to the ESP32-S3.
 ### 4. Connect CAN
 Hook up `CAN H` and `CAN L` to your Robomaster bus network (**1 Mbps**).
 
-### 5. Launch Dashboard
-Open `firmware/index.html` in Chrome/Edge → Click **CONNECT** → Select COM port.
+### 5. Launch Dashboard (Dual Mode)
+- **Wired:** Open `firmware/index.html` → Click **🔌 USB** → Select Port.
+- **Wireless:** Connect to `NAV_MODULE_OTA` WiFi → Run `python firmware/udp_relay.py` → Click **📡 WIFI**.
 
 ---
 
@@ -184,9 +182,9 @@ Open `firmware/index.html` in Chrome/Edge → Click **CONNECT** → Select COM p
 | 📖 [Hardware & Pinout](docs/HARDWARE.md) | Wiring diagrams, pin maps, Mermaid connection diagram |
 | 📡 [CAN Protocol](docs/CAN_PROTOCOL.md) | Message ID 0x101, byte-level packing, decoding math |
 | 🏗️ [System Architecture](docs/ARCHITECTURE.md) | FreeRTOS tasks, DMP pipeline, quaternion math, data flow |
-| 🖥️ [Web Dashboard](docs/WEB_DASHBOARD.md) | NAV PANEL v5.1 — panels, 3D cube, tare, CSV parsing |
+| 🖥️ [Web Dashboard](docs/WEB_DASHBOARD.md) | NAV PANEL v5.3 — Dual-mode connect, 3D cube, smoothing |
 | 🔩 [PCB Design](docs/PCB_DESIGN.md) | Circuit block diagram and component BOM |
-| 📋 [Changelog](CHANGELOG.md) | Full version history (v1.0 → v5.2) |
+| 📋 [Changelog](CHANGELOG.md) | Full version history (v1.0 → v5.3) |
 
 ---
 
@@ -197,20 +195,21 @@ Open `firmware/index.html` in Chrome/Edge → Click **CONNECT** → Select COM p
 ├── firmware/
 │   ├── esp32s3/
 │   │   └── esp32s3.ino       # Main firmware (FreeRTOS, DMP, CAN, LED)
-│   ├── index.html             # NAV PANEL v5.1 (Web Serial Dashboard)
-│   ├── chart.js               # Chart.js (bundled for offline use)
-│   └── README.md              # Firmware-specific documentation
+│   ├── index.html            # NAV PANEL v5.3 (Web Serial + WebSocket)
+│   ├── udp_relay.py          # Python UDP-to-WebSocket Relay
+│   ├── chart.js              # Chart.js (bundled for offline use)
+│   └── README.md             # Firmware-specific documentation
 ├── docs/
-│   ├── ARCHITECTURE.md        # System architecture & math
-│   ├── CAN_PROTOCOL.md        # CAN protocol specification
-│   ├── HARDWARE.md            # Pinout & wiring guide
-│   ├── WEB_DASHBOARD.md       # Dashboard user guide
-│   ├── PCB_DESIGN.md          # PCB design documentation
-│   └── dashboard_preview.png  # Dashboard screenshot
-├── v1/                        # KiCad PCB design files
-├── .github/                   # CI workflow
-├── LICENSE                    # MIT License
-└── README.md                  # This file
+│   ├── ARCHITECTURE.md       # System architecture & math
+│   ├── CAN_PROTOCOL.md       # CAN protocol specification
+│   ├── HARDWARE.md           # Pinout & wiring guide
+│   ├── WEB_DASHBOARD.md      # Dashboard user guide
+│   ├── PCB_DESIGN.md         # PCB design documentation
+│   └── dashboard_preview.png # Dashboard screenshot
+├── v1/                       # KiCad PCB design files
+├── .github/                  # CI workflow
+├── LICENSE                   # MIT License
+└── README.md                 # This file
 ```
 
 ---

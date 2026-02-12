@@ -192,6 +192,7 @@
             color: var(--accent-cyan);
             text-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
             font-family: 'Consolas', monospace;
+            transition: color 0.15s ease;
         }
 
         .value-md {
@@ -221,7 +222,8 @@
             height: 180px;
             position: relative;
             transform-style: preserve-3d;
-            transition: transform 0.05s linear;
+            transition: transform 80ms ease-out;
+            will-change: transform;
         }
 
         .face {
@@ -279,7 +281,6 @@
         .compass-svg {
             width: 120px;
             height: 120px;
-            transition: transform 0.05s linear;
         }
 
         .compass-ring {
@@ -308,6 +309,7 @@
 
         .compass-needle {
             fill: var(--alert-pink);
+            transition: transform 80ms ease-out;
         }
 
         .compass-needle-white {
@@ -471,7 +473,11 @@
                 OFFLINE</span>
             <button id="btnTheme" class="btn-theme" title="Toggle theme">🌙</button>
             <button id="btnRec" class="btn btn-rec" style="display:none;">● REC</button>
-            <button id="btnConn" class="btn btn-connect">CONNECT</button>
+            <input id="wsIp" type="text" value="localhost:8765" placeholder="Relay addr"
+                style="width:110px; padding:5px 8px; background:rgba(255,255,255,0.05); border:1px solid var(--text-dim); color:var(--text-main); border-radius:4px; font-size:0.75rem; font-family:Consolas,monospace; margin-right:5px; display:none;">
+            <button id="btnWifi" class="btn btn-connect"
+                style="border-color:#22c55e; color:#22c55e; margin-right:5px;">📡 WIFI</button>
+            <button id="btnConn" class="btn btn-connect">🔌 USB</button>
         </div>
     </header>
 
@@ -737,12 +743,22 @@
             if (uptimeInterval) { clearInterval(uptimeInterval); uptimeInterval = null; }
         }
 
-        // --- SERIAL CONNECTION ---
+        let connMode = null; // 'usb' or 'wifi'
+        let wsSocket = null;
+        let latestWsLine = null; // Buffer for latest WiFi data
+
+        // Toggle WiFi IP input visibility
+        document.getElementById('btnWifi').addEventListener('mouseenter', () => {
+            document.getElementById('wsIp').style.display = 'inline-block';
+        });
+
+        // --- USB SERIAL CONNECTION ---
         document.getElementById('btnConn').onclick = async () => {
             try {
                 port = await navigator.serial.requestPort();
                 await port.open({ baudRate: 115200 });
-                setOnline();
+                connMode = 'usb';
+                setOnline('USB');
                 const decoder = new TextDecoderStream();
                 port.readable.pipeTo(decoder.writable);
                 reader = decoder.readable.getReader();
@@ -750,12 +766,54 @@
             } catch (e) { console.log(e); }
         };
 
-        function setOnline() {
+        // --- WIFI WEBSOCKET CONNECTION ---
+        let wsReconnectTimer = null;
+        let wsTargetAddr = 'localhost:8765';
+
+        function connectWebSocket() {
+            const wsUrl = `ws://${wsTargetAddr}`;
+            if (wsSocket) { wsSocket.close(); wsSocket = null; }
+
+            wsSocket = new WebSocket(wsUrl);
+            wsSocket.onopen = () => {
+                connMode = 'wifi';
+                if (wsReconnectTimer) { clearInterval(wsReconnectTimer); wsReconnectTimer = null; }
+                setOnline('WIFI (UDP)');
+            };
+            wsSocket.onmessage = (event) => {
+                // Just store the latest line — render loop will pick it up
+                const lines = event.data.split('\n');
+                for (const line of lines) {
+                    if (line.includes(',')) latestWsLine = line;
+                }
+            };
+            wsSocket.onerror = () => { /* onclose will handle it */ };
+            wsSocket.onclose = () => {
+                wsSocket = null;
+                if (connMode === 'wifi') {
+                    document.getElementById('status').innerText = "● RECONNECTING...";
+                    document.getElementById('status').style.color = "#ffaa00";
+                    if (!wsReconnectTimer) {
+                        wsReconnectTimer = setInterval(() => connectWebSocket(), 2000);
+                    }
+                }
+            };
+        }
+
+        document.getElementById('btnWifi').onclick = () => {
+            wsTargetAddr = document.getElementById('wsIp').value.trim() || 'localhost:8765';
+            connMode = 'wifi';
+            connectWebSocket();
+        };
+
+        function setOnline(mode) {
             document.getElementById('status').innerText = "● ONLINE";
-            document.getElementById('status').style.color = "#00f3ff";
+            document.getElementById('status').style.color = mode === 'USB' ? '#00f3ff' : '#22c55e';
             document.getElementById('btnConn').style.display = 'none';
+            document.getElementById('btnWifi').style.display = 'none';
+            document.getElementById('wsIp').style.display = 'none';
             document.getElementById('btnRec').style.display = 'inline-block';
-            document.getElementById('statPort').innerText = 'CONNECTED';
+            document.getElementById('statPort').innerText = mode || 'CONNECTED';
             lineCount = 0; rejectCount = 0;
             startUptime();
         }
@@ -763,11 +821,16 @@
         function handleDisconnect() {
             document.getElementById('status').innerText = "● DISCONNECTED";
             document.getElementById('status').style.color = "#ff0055";
-            document.getElementById('btnConn').innerText = "RECONNECT";
+            document.getElementById('btnConn').innerText = "🔌 USB";
             document.getElementById('btnConn').style.display = 'inline-block';
+            document.getElementById('btnWifi').innerText = "📡 WIFI";
+            document.getElementById('btnWifi').style.display = 'inline-block';
             document.getElementById('btnRec').style.display = 'none';
             document.getElementById('statPort').innerText = 'DISCONNECTED';
             stopUptime();
+            connMode = null;
+            if (wsReconnectTimer) { clearInterval(wsReconnectTimer); wsReconnectTimer = null; }
+            if (wsSocket) { wsSocket.close(); wsSocket = null; }
             if (isRecording) document.getElementById('btnRec').click();
         }
 
@@ -844,10 +907,13 @@
             // 3D Cube
             document.getElementById('cube').style.transform = `rotateX(${-p}deg) rotateY(${y}deg) rotateZ(${-r}deg)`;
 
-            // Graphs
-            updateGraph(chartYaw, y - tareVal);
-            updateGraph(chartPitch, p);
-            updateGraph(chartRoll, r);
+            // Graphs — buffer data (rendered by interval below)
+            chartYaw.data.datasets[0].data.push(y - tareVal);
+            chartYaw.data.datasets[0].data.shift();
+            chartPitch.data.datasets[0].data.push(p);
+            chartPitch.data.datasets[0].data.shift();
+            chartRoll.data.datasets[0].data.push(r);
+            chartRoll.data.datasets[0].data.shift();
 
             // Recording
             if (isRecording) {
@@ -858,6 +924,23 @@
                 recordedData.push(`${ts},${p},${r},${y},${temp},${d[11]},${alt},${heap},${canE},${drift}`);
             }
         }
+
+        // Throttled chart rendering (~30Hz for smooth graphs)
+        setInterval(() => {
+            chartYaw.update();
+            chartPitch.update();
+            chartRoll.update();
+        }, 33);
+
+        // WiFi render loop — only renders latest data at screen refresh rate
+        function wsRenderLoop() {
+            if (latestWsLine) {
+                update(latestWsLine);
+                latestWsLine = null;
+            }
+            requestAnimationFrame(wsRenderLoop);
+        }
+        requestAnimationFrame(wsRenderLoop);
 
         function updateGraph(chart, val) {
             chart.data.datasets[0].data.push(val);

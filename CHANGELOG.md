@@ -4,6 +4,19 @@ All notable changes to the **Industrial AHRS Navigation Module** will be documen
 
 ---
 
+## [5.4] — 2026-02-12
+
+### 🚀 UDP Streaming & Power Optimization
+- **UDP Broadcast**: Replaced TCP WebSocket with connectionless UDP broadcast on port 4210. Latency reduced from >2s to ~20ms.
+- **Power Save**: Re-enabled WiFi modem sleep (DTIM 3) to reduce power consumption (UDP handles this well).
+- **CPU Optimization**: Completely removed `AsyncWebServer` and `AsyncWebSocket` overhead. Reduced LED task to 10Hz. Optimized loop delay.
+
+### 🖥️ Dashboard (Dual-Mode)
+- **Wireless Relay**: Added `udp_relay.py` to bridge UDP packets to local WebSocket (`ws://localhost:8765`).
+- **Smooth Animations**: Added CSS `ease-out` transitions to 3D cube and compass for fluid movement.
+- **30Hz Charts**: Increased graph render rate from 15Hz to 30Hz.
+- **Dual Connectivity**: Toggle between **🔌 USB** (Web Serial) and **📡 WIFI** (UDP Relay).
+
 ## [5.3] — 2026-02-12
 
 ### 🔧 Firmware Improvements
