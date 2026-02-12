@@ -192,6 +192,3 @@ Hook up `CAN H` and `CAN L` to your Robomaster bus network (**1 Mbps**).
 
 ---
 
-<p align="center">
-  Made with ❤️ for Robocon
-</p>
